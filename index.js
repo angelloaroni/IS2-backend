@@ -1,7 +1,6 @@
-const express = require("express");
+const app = require("./app");
 
-const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
