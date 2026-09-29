@@ -1,0 +1,83 @@
+CREATE TABLE Usuario
+(
+  cod_user INT NOT NULL,
+  id_user INT NOT NULL,
+  nombre VARCHAR NOT NULL,
+  puntos FLOAT NOT NULL,
+  tipo VARCHAR NOT NULL,
+  contraseña VARCHAR NOT NULL,
+  PRIMARY KEY (id_user)
+);
+
+CREATE TABLE TachoInteligente
+(
+  id_tacho INT NOT NULL,
+  lat FLOAT NOT NULL,
+  long FLOAT NOT NULL,
+  capacidad BOOL NOT NULL,
+  PRIMARY KEY (id_tacho)
+);
+
+CREATE TABLE Residuo
+(
+  id_residuo INT NOT NULL,
+  nombre VARCHAR NOT NULL,
+  peso FLOAT NOT NULL,
+  tipo VARCHAR NOT NULL,
+  id_user INT NOT NULL,
+  id_tacho INT NOT NULL,
+  PRIMARY KEY (id_residuo),
+  FOREIGN KEY (id_user) REFERENCES Usuario(id_user),
+  FOREIGN KEY (id_tacho) REFERENCES TachoInteligente(id_tacho)
+);
+
+CREATE TABLE Logros
+(
+  id_logro INT NOT NULL,
+  nombre VARCHAR NOT NULL,
+  condicion VARCHAR NOT NULL,
+  PRIMARY KEY (id_logro)
+);
+
+CREATE TABLE Logros_Usuario
+(
+  fecha_obtencion DATE NOT NULL,
+  id_logro INT NOT NULL,
+  id_user INT NOT NULL,
+  PRIMARY KEY (id_logro, id_user),
+  FOREIGN KEY (id_logro) REFERENCES Logros(id_logro),
+  FOREIGN KEY (id_user) REFERENCES Usuario(id_user)
+);
+
+CREATE TABLE Premio
+(
+  id_premio INT NOT NULL,
+  nombre VARCHAR NOT NULL,
+  descripcion VARCHAR NOT NULL,
+  costo FLOAT NOT NULL,
+  stock INT NOT NULL,
+  PRIMARY KEY (id_premio)
+);
+
+CREATE TABLE usuario_Premio
+(
+  fecha_obtencion DATE NOT NULL,
+  id_premio INT NOT NULL,
+  id_user INT NOT NULL,
+  PRIMARY KEY (id_premio, id_user),
+  FOREIGN KEY (id_premio) REFERENCES Premio(id_premio),
+  FOREIGN KEY (id_user) REFERENCES Usuario(id_user)
+);
+
+CREATE TABLE HistorialReciclaje
+(
+  id_historial INT NOT NULL,
+  fecha DATE NOT NULL,
+  id_user INT NOT NULL,
+  id_tacho INT NOT NULL,
+  id_residuo INT NOT NULL,
+  PRIMARY KEY (id_historial),
+  FOREIGN KEY (id_user) REFERENCES Usuario(id_user),
+  FOREIGN KEY (id_tacho) REFERENCES TachoInteligente(id_tacho),
+  FOREIGN KEY (id_residuo) REFERENCES Residuo(id_residuo)
+);
