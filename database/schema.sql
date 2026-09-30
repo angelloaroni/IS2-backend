@@ -13,8 +13,8 @@ CREATE TABLE Usuario
 CREATE TABLE TachoInteligente
 (
   id_tacho INT NOT NULL,
-  lat FLOAT NOT NULL,
-  long FLOAT NOT NULL,
+  latitud FLOAT NOT NULL,
+  longitud FLOAT NOT NULL,
   capacidad BOOL NOT NULL,
   PRIMARY KEY (id_tacho)
 );
