@@ -6,6 +6,7 @@ CREATE TABLE Usuario
   puntos FLOAT NOT NULL,
   tipo VARCHAR NOT NULL,
   contraseña VARCHAR NOT NULL,
+  estado BOOL NOT NULL,
   PRIMARY KEY (id_user)
 );
 
@@ -35,7 +36,8 @@ CREATE TABLE Logros
 (
   id_logro INT NOT NULL,
   nombre VARCHAR NOT NULL,
-  condicion VARCHAR NOT NULL,
+  tipo_condicion VARCHAR NOT NULL,
+  valor_objetivo FLOAT NOT NULL,
   PRIMARY KEY (id_logro)
 );
 
@@ -61,10 +63,11 @@ CREATE TABLE Premio
 
 CREATE TABLE usuario_Premio
 (
+  id_usuario_premio INT NOT NULL,
   fecha_obtencion DATE NOT NULL,
   id_premio INT NOT NULL,
   id_user INT NOT NULL,
-  PRIMARY KEY (id_premio, id_user),
+  PRIMARY KEY (id_usuario_premio),
   FOREIGN KEY (id_premio) REFERENCES Premio(id_premio),
   FOREIGN KEY (id_user) REFERENCES Usuario(id_user)
 );
