@@ -1,2 +1,5 @@
 node_modules/
-.env
+#en caso de que el de arriba no funcione esta este
+node_modules
+#aun no existe pero no importa
+.env 
