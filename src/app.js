@@ -4,7 +4,7 @@ import cors from 'cors';
 import indexRoutes from './routes/index.routes.js';
 import errorMiddleware from './middlewares/error.middleware.js';
 import AppError from './utils/AppError.js'; //prueba
-
+import './utils/listeners.js';
 
 const app = express();
 
@@ -17,7 +17,7 @@ app.get('/', (req, res) => {
 
 app.use('/api', indexRoutes);
 
-//prueba
+//solo para proabr que funcionan los mensajes, en realidad esto despues se puede borrar
 app.get('/prueba-error', (req, res, next) => {
   next(new AppError('Esto es una prueba', 400));
 });
