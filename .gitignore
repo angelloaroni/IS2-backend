@@ -1,4 +1,17 @@
 node_modules/
+.env
+.env.local
+dist/
+build/
+coverage/
+logs/
+*.log
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+/.vscode/
+node_modules/
 #en caso de que el de arriba no funcione esta este
 node_modules
 #aun no existe pero no importa

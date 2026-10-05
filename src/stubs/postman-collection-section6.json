@@ -1,0 +1,42 @@
+{
+  "info": {
+    "name": "IS2 - Sección 6 (Usuarios)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "item": [
+    {
+      "name": "Get Usuario por id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/usuarios/:id",
+          "host": ["{{baseUrl}}"],
+          "path": ["api","usuarios",":id"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Sumar puntos",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"puntos\": 10 }" },
+        "url": { "raw": "{{baseUrl}}/api/usuarios/:id/puntos/sumar", "path": ["api","usuarios",":id","puntos","sumar"] }
+      },
+      "response": []
+    },
+    {
+      "name": "Restar puntos",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"puntos\": 5 }" },
+        "url": { "raw": "{{baseUrl}}/api/usuarios/:id/puntos/restar", "path": ["api","usuarios",":id","puntos","restar"] }
+      },
+      "response": []
+    }
+  ]
+}
