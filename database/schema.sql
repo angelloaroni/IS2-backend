@@ -22,7 +22,6 @@ CREATE TABLE TachoInteligente
 CREATE TABLE Residuo
 (
   id_residuo INT NOT NULL,
-  nombre VARCHAR NOT NULL,
   peso FLOAT NOT NULL,
   tipo VARCHAR NOT NULL,
   id_user INT NOT NULL,
