@@ -1,13 +1,15 @@
 CREATE TABLE Usuario
 (
-  cod_user INT NOT NULL,
+  cod_user VARCHAR(8) NOT NULL,
   id_user INT NOT NULL,
   nombre VARCHAR NOT NULL,
   puntos FLOAT NOT NULL,
   tipo VARCHAR NOT NULL,
   contraseña VARCHAR NOT NULL,
   estado BOOL NOT NULL,
-  PRIMARY KEY (id_user)
+  PRIMARY KEY (id_user),
+  CONSTRAINT usuario_cod_user_unique UNIQUE (cod_user),
+  CONSTRAINT usuario_cod_user_formato CHECK (cod_user ~ '^[0-9]{8}$')
 );
 
 CREATE TABLE TachoInteligente

@@ -3,8 +3,12 @@ import { DataTypes } from "sequelize";
 
 const Usuario = sequelize.define('Usuario', {
 	cod_user: {
-		type: DataTypes.INTEGER,
-		allowNull: false
+		type: DataTypes.STRING(8),
+		allowNull: false,
+		unique: true,
+		validate: {
+			is: /^[0-9]{8}$/
+		}
 	},
 	id_user: {
 		type: DataTypes.INTEGER,

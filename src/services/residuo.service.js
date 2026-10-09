@@ -26,17 +26,23 @@ export async function registrarResiduo(data){
       id_user,
       id_tacho,
     }, { transaction });
+
+    await HistorialReciclaje.create({
+      fecha: new Date(),
+      id_user,
+      id_tacho,
+      id_residuo: residuo.id_residuo,
+    }, { transaction });
+
+    const puntosGanados = calcularPuntos(Number(peso));
+
+    await transaction.commit();
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
   }
-
-  await HistorialReciclaje.create({
-    fecha: new Date(),
-    id_user,
-    id_tacho,
-    id_residuo: residuo.id_residuo,
-  }, { transaction });
-
-  const puntosGanados = calcularPuntos(Number(peso));
 }
+
   
 
 
