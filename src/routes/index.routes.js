@@ -1,6 +1,6 @@
 import {Router} from 'express';
 
-import authMiddleware from '../middlewares/auth.middleware.js';
+import authMiddleware, {authorizeRoles} from '../middlewares/auth.middleware.js';
 import authRoutes from './auth.routes.js';
 import usuarioRoutes from './usuario.routes.js';
 import residuosRoutes from './residuos.routes.js';
@@ -13,12 +13,13 @@ import logrosRoutes from './logro.routes.js';
 const router = Router();
 
 router.use('/auth', authRoutes);
-router.use('/usuarios', authMiddleware, usuarioRoutes);
-router.use('/residuos', authMiddleware, residuosRoutes);
-router.use('/residuo', authMiddleware, residuoRoutes);
-router.use('/premios', authMiddleware, premiosRoutes);
-router.use('/tachos', authMiddleware, tachoRoutes);
-router.use('/ranking', authMiddleware, rankingRoutes);
-router.use('/logros', authMiddleware, logrosRoutes);
+
+router.use('/usuarios', authMiddleware, authorizeRoles(['admin', 'usuario']), usuarioRoutes);
+router.use('/residuos', authMiddleware, authorizeRoles(['admin', 'usuario']), residuosRoutes);
+router.use('/residuo', authMiddleware, authorizeRoles(['admin', 'usuario']), residuoRoutes);
+router.use('/premios', authMiddleware, authorizeRoles(['admin', 'usuario']), premiosRoutes);
+router.use('/tachos', authMiddleware, authorizeRoles(['admin']), tachoRoutes);
+router.use('/ranking', authMiddleware, authorizeRoles(['admin', 'usuario']), rankingRoutes);
+router.use('/logros', authMiddleware, authorizeRoles(['admin', 'usuario']), logrosRoutes);
 
 export default router;

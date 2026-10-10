@@ -1,0 +1,77 @@
+@baseUrl = http://localhost:3000/api
+
+### 1) Registro de usuario normal
+POST {{baseUrl}}/auth/registro
+Content-Type: application/json
+
+{
+  "cod_user": "20230230",
+  "nombre": "Ana Gomez",
+  "tipo": "usuario",
+  "contraseña": "123456"
+}
+
+### 2) Registro de administrador
+POST {{baseUrl}}/auth/registro
+Content-Type: application/json
+
+{
+  "cod_user": "20240101",
+  "nombre": "Admin Principal",
+  "tipo": "admin",
+  "contraseña": "admin123"
+}
+
+### 3) Login de usuario
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "cod_user": "20230230",
+  "contraseña": "123456"
+}
+
+### 4) Login de admin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "cod_user": "20240101",
+  "contraseña": "admin123"
+}
+
+### 5) Acceso protegido para usuario
+GET {{baseUrl}}/usuarios
+x-cod-user: 20230230
+
+### 6) Acceso protegido para admin
+GET {{baseUrl}}/tachos
+x-cod-user: 20240101
+
+### 7) Usuario normal intentando acceder a ruta admin
+GET {{baseUrl}}/tachos
+x-cod-user: 20230230
+
+### 8) Usuario inexistente
+GET {{baseUrl}}/usuarios
+x-cod-user: 00000000
+
+### 9) Login con contraseña incorrecta
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "cod_user": "20230230",
+  "contraseña": "passincorrecta"
+}
+
+### 10) Registro con cod_user inválido
+POST {{baseUrl}}/auth/registro
+Content-Type: application/json
+
+{
+  "cod_user": "ABC123",
+  "nombre": "Usuario Malo",
+  "tipo": "usuario",
+  "contraseña": "123456"
+}
