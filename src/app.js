@@ -25,8 +25,8 @@ app.get('/prueba-error', (req, res, next) => {
 app.get('/prueba-500', (req, res, next) => {
   next(new Error('Fallo inesperado'));
 });
-//
 
-app.use(errorMiddleware);   // siempre al final
+app.use(errorMiddleware);   
+
 
 export default app;

@@ -5,8 +5,8 @@ POST {{baseUrl}}/auth/registro
 Content-Type: application/json
 
 {
-  "cod_user": "20230230",
-  "nombre": "Ana Gomez",
+  "cod_user": "20245633",
+  "nombre": "Angello",
   "tipo": "usuario",
   "contraseña": "123456"
 }

@@ -13,7 +13,8 @@ const Usuario = sequelize.define('Usuario', {
 	id_user: {
 		type: DataTypes.INTEGER,
 		primaryKey: true,
-		allowNull: false
+		allowNull: false,
+		autoIncrement: true
 	},
 	nombre: {
 		type: DataTypes.STRING,
@@ -29,7 +30,8 @@ const Usuario = sequelize.define('Usuario', {
 	},
 	'contraseña': {
 		type: DataTypes.STRING,
-		allowNull: false
+		allowNull: false,
+		field: 'contrasena'
 	},
 	estado: {
 		type: DataTypes.BOOLEAN,
