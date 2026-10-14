@@ -1,18 +1,8 @@
-import {Router} from 'express';
-import authMiddleware from '../middlewares/auth.middleware.js';
+import { Router } from 'express';
+import { obtenerRankingController } from '../controllers/ranking.controller.js';
 
 const router = Router();
 
-//para hacer pruebas
-
-/* router.get('/_debug-auth', (req, res) => {
-  return res.json({ usuario: req.usuario });
-});
- */
-
-router.get('/', authMiddleware, (req, res) => {
-    
-});
-
+router.get('/', obtenerRankingController);
 
 export default router;

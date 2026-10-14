@@ -59,7 +59,22 @@ export async function registrarUsuario(data = {}) {
     return sanitizarUsuario(usuarioCreado);
 }
 
-export async function loginUsuario({ cod_user, contraseña } = {}) {
+export async function obtenerUsuario(id) {
+    const usuario = await usuarioRepository.buscarPorId(id);
+    return sanitizarUsuario(usuario);
+}
+
+export async function bloquearUsuario(id) {
+    const idNormalizado = String(id ?? '').trim();
+    if (!/^[1-9]\d*$/.test(idNormalizado) || !Number.isSafeInteger(Number(idNormalizado))) {
+        throw new AppError('El id del usuario debe ser un entero positivo', 400);
+    }
+
+    const usuario = await usuarioRepository.desactivarPorId(Number(idNormalizado));
+    return sanitizarUsuario(usuario);
+}
+
+export async function validarUsuario({ cod_user, contraseña } = {}) {
     const codigo = normalizarCodUser(cod_user);
 
     if (contraseña === undefined || contraseña === null || String(contraseña).trim() === '') {
@@ -82,3 +97,5 @@ export async function loginUsuario({ cod_user, contraseña } = {}) {
 
     return sanitizarUsuario(usuario);
 }
+
+export const loginUsuario = validarUsuario;

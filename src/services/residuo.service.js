@@ -3,7 +3,14 @@ import sequelize from '../config/db.js';
 import AppError from '../utils/AppError.js';
 import Residuo from '../models/Residuo.js';
 import HistorialReciclaje from '../models/HistorialReciclaje.js';
+import Usuario from '../models/Usuario.js';
 import { calcularPuntos } from '../formulas/calcularPuntos.js';
+
+async function siguienteId(modelo, campo, tabla, transaction) {
+  await sequelize.query(`LOCK TABLE "${tabla}" IN EXCLUSIVE MODE`, { transaction });
+  const ultimoId = await modelo.max(campo, { transaction });
+  return Number(ultimoId ?? 0) + 1;
+}
 
 export async function registrarResiduo(data) {
   const { idUser, idTacho, tipo, peso } = data;
@@ -20,15 +27,23 @@ export async function registrarResiduo(data) {
   const transaction = await sequelize.transaction();
 
   try {
+    const idResiduo = await siguienteId(Residuo, 'id_residuo', 'residuo', transaction);
     const residuo = await Residuo.create({
-      nombre: String(tipo),
+      id_residuo: idResiduo,
       peso: pesoNumero,
       tipo: String(tipo),
       id_user: Number(idUser),
       id_tacho: Number(idTacho),
     }, { transaction });
 
+    const idHistorial = await siguienteId(
+      HistorialReciclaje,
+      'id_historial',
+      'historialreciclaje',
+      transaction
+    );
     await HistorialReciclaje.create({
+      id_historial: idHistorial,
       fecha: new Date(),
       id_user: Number(idUser),
       id_tacho: Number(idTacho),
@@ -38,12 +53,20 @@ export async function registrarResiduo(data) {
     const puntosGanados = calcularPuntos(pesoNumero);
     const fecha = new Date();
 
+    await Usuario.increment('puntos', {
+      by: puntosGanados,
+      where: { id_user: Number(idUser) },
+      transaction,
+    });
+
     await transaction.commit();
 
     eventos.emit(EVENTOS.RESIDUO_REGISTRADO, {
       idUser: Number(idUser),
       idResiduo: residuo.id_residuo,
       idTacho: Number(idTacho),
+      tipo: String(tipo),
+      peso: pesoNumero,
       puntosGanados,
       fecha,
     });

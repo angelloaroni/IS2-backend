@@ -19,6 +19,14 @@ class UsuarioRepository extends RepositoryBase {
         return this.findById(id);
     }
 
+    async desactivarPorId(id) {
+        const usuario = await this.buscarPorId(id);
+        if (usuario.estado !== false) {
+            await usuario.update({ estado: false });
+        }
+        return usuario;
+    }
+
     async sumarPuntos(id, puntos) {
         const usuario = await this.model.findByPk(id);
         if (!usuario) {

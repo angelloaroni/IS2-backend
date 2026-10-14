@@ -6,6 +6,7 @@ export const registrarResiduo = async (req, res, next) => {
 
         const residuo = await registrarResiduoService({
             ...payload,
+            idUser: req.usuario.id_user,
         })
 
         return res.status(201).json({

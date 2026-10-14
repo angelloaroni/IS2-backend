@@ -1,5 +1,5 @@
 import { exito } from '../utils/respuesta.js';
-import { registrarUsuario, loginUsuario } from '../services/usuario.service.js';
+import { registrarUsuario, validarUsuario } from '../services/usuario.service.js';
 
 export async function registrarUsuarioController(req, res, next) {
     try {
@@ -12,7 +12,7 @@ export async function registrarUsuarioController(req, res, next) {
 
 export async function loginController(req, res, next) {
     try {
-        const usuario = await loginUsuario(req.body);
+        const usuario = await validarUsuario(req.body);
         return exito(res, usuario, 200);
     } catch (error) {
         return next(error);

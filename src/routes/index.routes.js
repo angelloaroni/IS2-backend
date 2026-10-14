@@ -9,6 +9,7 @@ import premiosRoutes from './premios.routes.js';
 import tachoRoutes from './tacho.routes.js';
 import rankingRoutes from './ranking.routes.js';
 import logrosRoutes from './logro.routes.js';
+import notificacionRoutes from './notificacion.routes.js';
 
 const router = Router();
 
@@ -21,5 +22,6 @@ router.use('/premios', authMiddleware, authorizeRoles(['admin', 'usuario']), pre
 router.use('/tachos', authMiddleware, authorizeRoles(['admin']), tachoRoutes);
 router.use('/ranking', authMiddleware, authorizeRoles(['admin', 'usuario']), rankingRoutes);
 router.use('/logros', authMiddleware, authorizeRoles(['admin', 'usuario']), logrosRoutes);
+router.use('/notificaciones', authMiddleware, authorizeRoles(['admin', 'usuario']), notificacionRoutes);
 
 export default router;

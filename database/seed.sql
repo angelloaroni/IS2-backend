@@ -3,14 +3,14 @@
 -- ==========================================
 
 -- Inserción de Usuarios
-INSERT INTO Usuario (cod_user, id_user, nombre, puntos, tipo, contraseña, estado) VALUES
-(1001, 1, 'Carlos Pérez', 150.5, 'Estudiante', 'hashed_pass_123', TRUE),
-(1002, 2, 'María Gómez', 320.0, 'Profesor', 'hashed_pass_456', TRUE),
-(1003, 3, 'Juan Quispe', 45.0, 'Externo', 'hashed_pass_789', TRUE);
+INSERT INTO Usuario (cod_user, id_user, nombre, puntos, tipo, contrasena, estado) VALUES
+('00001001', 1, 'Carlos Pérez', 150.5, 'Estudiante', 'hashed_pass_123', TRUE),
+('00001002', 2, 'María Gómez', 320.0, 'Profesor', 'hashed_pass_456', TRUE),
+('00001003', 3, 'Juan Quispe', 45.0, 'Externo', 'hashed_pass_789', TRUE);
 
 -- Inserción de Tachos Inteligentes
 -- (Nota: capacidad como BOOL suele representar si está lleno o no, ej: FALSE = disponible/no lleno)
-INSERT INTO TachoInteligente (id_tacho, lat, long, capacidad) VALUES
+INSERT INTO TachoInteligente (id_tacho, latitud, longitud, capacidad) VALUES
 (1, -12.0464, -77.0428, FALSE),
 (2, -12.0475, -77.0415, FALSE),
 (3, -12.0500, -77.0450, TRUE);
@@ -33,11 +33,11 @@ INSERT INTO Premio (id_premio, nombre, descripcion, costo, stock) VALUES
 -- ==========================================
 
 -- Inserción de Residuos
-INSERT INTO Residuo (id_residuo, nombre, peso, tipo, id_user, id_tacho) VALUES
-(1, 'Botella de Plástico PET', 0.25, 'Plástico', 1, 1),
-(2, 'Lata de Aluminio', 0.15, 'Metal', 1, 1),
-(3, 'Revista de Papel', 0.50, 'Papel', 2, 2),
-(4, 'Botella de Vidrio', 0.40, 'Vidrio', 3, 3);
+INSERT INTO Residuo (id_residuo, peso, tipo, id_user, id_tacho) VALUES
+(1, 0.25, 'Plástico', 1, 1),
+(2, 0.15, 'Metal', 1, 1),
+(3, 0.50, 'Papel', 2, 2),
+(4, 0.40, 'Vidrio', 3, 3);
 
 -- Inserción de Logros de Usuario
 INSERT INTO Logros_Usuario (fecha_obtencion, id_logro, id_user) VALUES
@@ -62,3 +62,10 @@ INSERT INTO HistorialReciclaje (id_historial, fecha, id_user, id_tacho, id_resid
 (2, '2026-06-01', 1, 1, 2),
 (3, '2026-06-02', 2, 2, 3),
 (4, '2026-06-03', 3, 3, 4);
+
+SELECT setval(
+  pg_get_serial_sequence('usuario', 'id_user'),
+  COALESCE(MAX(id_user), 1),
+  MAX(id_user) IS NOT NULL
+)
+FROM usuario;

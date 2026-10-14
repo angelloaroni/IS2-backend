@@ -7,10 +7,6 @@ const Residuo = sequelize.define('Residuo', {
 		primaryKey: true,
 		allowNull: false
 	},
-	nombre: {
-		type: DataTypes.STRING,
-		allowNull: false
-	},
 	peso: {
 		type: DataTypes.FLOAT,
 		allowNull: false
