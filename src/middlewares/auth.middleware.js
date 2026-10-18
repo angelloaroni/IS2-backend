@@ -2,46 +2,49 @@ import { timingSafeEqual } from 'node:crypto';
 import Usuario from '../models/Usuario.js';
 import { fallo } from '../utils/respuesta.js';
 import AppError from '../utils/AppError.js';
+import { verifyAccessToken } from '../utils/jwt.js';
 
 export default async function authMiddleware(req, res, next) {
-    try {
-        const codUserHeader = req.get('x-cod-user');
+    const authorization = req.get('authorization');
+    const match = typeof authorization === 'string'
+        ? /^Bearer\s+(\S+)$/i.exec(authorization)
+        : null;
 
-        if (!codUserHeader) {
-            return fallo(res, 'Falta el header x-cod-user', 401);
-        }
-
-        const codUser = String(codUserHeader).trim();
-
-        if (!/^\d{8}$/.test(codUser)) {
-            return fallo(res, 'El cod_user debe tener exactamente 8 dígitos', 401);
-        }
-
-        const usuario = await Usuario.findOne({
-            where: { cod_user: codUser }
-        });
-
-        if (!usuario) {
-            return fallo(res, 'Usuario no autenticado', 401);
-        }
-
-        if (usuario.estado === false) {
-            return fallo(res, 'El usuario está inactivo', 401);
-        }
-
-        req.usuario = {
-            id_user: usuario.id_user,
-            cod_user: usuario.cod_user,
-            nombre: usuario.nombre,
-            tipo: usuario.tipo,
-            estado: usuario.estado,
-        };
-
-        return next();
-    } catch (error) {
-        console.error(error);
-        return fallo(res, 'Error de autenticación', 500);
+    if (!match) {
+        return fallo(res, 'Se requiere un token Bearer válido', 401);
     }
+
+    let claims;
+    try {
+        claims = verifyAccessToken(match[1]);
+    } catch (error) {
+        if (error instanceof AppError) {
+            return next(error);
+        }
+        if (error?.name === 'JsonWebTokenError' || error?.name === 'TokenExpiredError') {
+            return fallo(res, 'Token inválido o expirado', 401);
+        }
+        return next(error);
+    }
+
+    if (typeof claims !== 'object' || typeof claims.sub !== 'string' || !/^[1-9]\d*$/.test(claims.sub)) {
+        return fallo(res, 'Token inválido o expirado', 401);
+    }
+
+    const usuario = await Usuario.findByPk(Number(claims.sub));
+    if (!usuario || usuario.estado === false) {
+        return fallo(res, 'Usuario no autenticado o inactivo', 401);
+    }
+
+    req.usuario = {
+        id_user: usuario.id_user,
+        cod_user: usuario.cod_user,
+        nombre: usuario.nombre,
+        tipo: usuario.tipo,
+        estado: usuario.estado,
+    };
+
+    return next();
 }
 
 export function authTachoMiddleware(req, res, next) {

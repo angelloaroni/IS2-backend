@@ -1,5 +1,7 @@
 import UsuarioRepository from '../repositories/usuario.repository.js';
 import AppError from '../utils/AppError.js';
+import { createAccessToken } from '../utils/jwt.js';
+import { hashPassword, isPasswordHash, MAX_PASSWORD_BYTES, verifyPassword } from '../utils/password.js';
 
 const usuarioRepository = new UsuarioRepository();
 
@@ -25,10 +27,10 @@ function sanitizarUsuario(usuario) {
 }
 
 export async function registrarUsuario(data = {}) {
-    const cod_user = normalizarCodUser(data.cod_user);
-    const nombre = String(data.nombre ?? '').trim();
-    const tipo = String(data.tipo ?? '').trim().toLowerCase();
-    const contraseña = String(data.contraseña ?? '').trim();
+    const cod_user = normalizarCodUser(data?.cod_user);
+    const nombre = String(data?.nombre ?? '').trim();
+    const tipo = String(data?.tipo ?? '').trim().toLowerCase();
+    const contraseña = typeof data?.contraseña === 'string' ? data.contraseña : '';
 
     if (!nombre) {
         throw new AppError('El nombre es obligatorio', 400);
@@ -38,8 +40,16 @@ export async function registrarUsuario(data = {}) {
         throw new AppError('El tipo de usuario es obligatorio', 400);
     }
 
-    if (!contraseña) {
+    if (tipo !== 'usuario') {
+        throw new AppError('El registro público solo permite cuentas de usuario', 403);
+    }
+
+    if (!contraseña.trim()) {
         throw new AppError('La contraseña es obligatoria', 400);
+    }
+
+    if (Buffer.byteLength(contraseña) > MAX_PASSWORD_BYTES) {
+        throw new AppError(`La contraseña no puede superar ${MAX_PASSWORD_BYTES} bytes`, 400);
     }
 
     const usuarioExistente = await usuarioRepository.buscarPorCodigo(cod_user);
@@ -52,7 +62,7 @@ export async function registrarUsuario(data = {}) {
         nombre,
         puntos: 0,
         tipo,
-        contraseña,
+        contraseña: await hashPassword(contraseña),
         estado: true,
     });
 
@@ -74,11 +84,16 @@ export async function bloquearUsuario(id) {
     return sanitizarUsuario(usuario);
 }
 
-export async function validarUsuario({ cod_user, contraseña } = {}) {
-    const codigo = normalizarCodUser(cod_user);
+export async function validarUsuario(data = {}) {
+    const codigo = normalizarCodUser(data?.cod_user);
+    const contraseña = typeof data?.contraseña === 'string' ? data.contraseña : '';
 
-    if (contraseña === undefined || contraseña === null || String(contraseña).trim() === '') {
+    if (!contraseña.trim()) {
         throw new AppError('La contraseña es obligatoria', 400);
+    }
+
+    if (Buffer.byteLength(contraseña) > MAX_PASSWORD_BYTES) {
+        throw new AppError(`La contraseña no puede superar ${MAX_PASSWORD_BYTES} bytes`, 400);
     }
 
     const usuario = await usuarioRepository.buscarPorCodigo(codigo);
@@ -87,7 +102,7 @@ export async function validarUsuario({ cod_user, contraseña } = {}) {
     }
 
     const contraseñaGuardada = String(usuario['contraseña'] ?? '');
-    if (contraseñaGuardada !== String(contraseña)) {
+    if (!(await verifyPassword(contraseña, contraseñaGuardada))) {
         throw new AppError('Credenciales inválidas', 401);
     }
 
@@ -95,7 +110,14 @@ export async function validarUsuario({ cod_user, contraseña } = {}) {
         throw new AppError('El usuario está inactivo', 401);
     }
 
-    return sanitizarUsuario(usuario);
+    if (!isPasswordHash(contraseñaGuardada)) {
+        await usuario.update({ contraseña: await hashPassword(contraseña) });
+    }
+
+    return {
+        usuario: sanitizarUsuario(usuario),
+        token: createAccessToken(usuario),
+    };
 }
 
 export const loginUsuario = validarUsuario;

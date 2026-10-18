@@ -28,13 +28,17 @@ Las respuestas exitosas tienen esta envoltura:
 
 En la tabla de cada endpoint, los campos indicados como **recibe** describen lo que se envía en el body, query string, ruta o header. **Devuelve** describe el objeto dentro de `data`.
 
-En las rutas protegidas, el backend actualmente recibe el identificador del usuario mediante:
+En las rutas protegidas, primero inicia sesión y envía el JWT de la respuesta en el header:
 
 ```http
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
-En la ruta de recepción de tachos se usa:
+Configura `JWT_SECRET` en el entorno del servidor con al menos 32 bytes aleatorios. Las contraseñas se guardan con hash bcrypt; las contraseñas antiguas en texto plano se convierten a hash al iniciar sesión correctamente.
+
+El registro público solo permite crear cuentas de tipo `usuario`. Las cuentas `admin` deben provisionarse por un proceso administrativo confiable (por ejemplo, promoviendo una cuenta desde un proceso con acceso controlado a la base de datos), nunca enviando `"tipo": "admin"` al registro.
+
+La ruta de recepción de tachos se autentica por separado y usa:
 
 ```http
 x-tacho-api-key: <clave configurada para el servidor>
@@ -63,8 +67,8 @@ POST /auth/registro
 |---|---|---|
 | `cod_user` | string | Obligatorio, ocho dígitos y único. |
 | `nombre` | string | Obligatorio, no vacío. |
-| `tipo` | string | Obligatorio. |
-| `contraseña` | string | Obligatoria, no vacía. |
+| `tipo` | string | Obligatorio; debe ser `usuario`. |
+| `contraseña` | string | Obligatoria, no vacía y máximo 72 bytes en UTF-8. |
 
 **Devuelve** HTTP 201: el objeto de usuario creado, sin el campo de contraseña. El servidor inicializa `puntos` en 0 y `estado` en `true`. El identificador se asigna al guardar.
 
@@ -96,18 +100,21 @@ POST /auth/login
 }
 ```
 
-**Devuelve** HTTP 200: el objeto del usuario encontrado, sin la contraseña. El endpoint no devuelve token ni una estructura adicional de sesión.
+**Devuelve** HTTP 200: un objeto `usuario` sin la contraseña y un JWT en `token`. Usa ese token para acceder a las rutas protegidas.
 
 Ejemplo de `data`:
 
 ```json
 {
-  "id_user": 1,
-  "cod_user": "00001001",
-  "nombre": "Carlos Pérez",
-  "puntos": 150.5,
-  "tipo": "usuario",
-  "estado": true
+  "usuario": {
+    "id_user": 1,
+    "cod_user": "00001001",
+    "nombre": "Carlos Pérez",
+    "puntos": 150.5,
+    "tipo": "usuario",
+    "estado": true
+  },
+  "token": "<jwt-firmado>"
 }
 ```
 
@@ -119,7 +126,7 @@ Endpoint recomendado:
 
 ```http
 POST /residuos
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe** en el body:
@@ -140,7 +147,7 @@ x-cod-user: 00001001
 | `peso` | número | Finito y mayor que cero. |
 | `idempotencyKey` | string | Obligatoria, no vacía y hasta 128 caracteres. |
 
-El usuario se determina a partir del header `x-cod-user`; no hace falta enviar `idUser`. Tampoco se envían puntos ni fecha: los determina el servidor.
+El usuario se determina a partir del JWT; no hace falta enviar `idUser`. Tampoco se envían puntos ni fecha: los determina el servidor.
 
 **Devuelve** HTTP 201:
 
@@ -230,7 +237,7 @@ Las respuestas serializadas de tacho contienen `idTacho`, `latitud`, `longitud` 
 
 ```http
 GET /tachos
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -256,7 +263,7 @@ x-cod-user: 00001001
 
 ```http
 GET /tachos/1
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** `id` como entero positivo en la ruta.
@@ -267,7 +274,7 @@ x-cod-user: 00001001
 
 ```http
 GET /tachos/cercanos?lat=-12.0464&lng=-77.0428&radio=5000
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe** estos parámetros en query:
@@ -300,7 +307,7 @@ x-cod-user: 00001001
 
 ```http
 POST /tachos
-x-cod-user: 00000001
+Authorization: Bearer <token>
 ```
 
 **Recibe** en el body:
@@ -321,7 +328,7 @@ Latitud debe estar entre -90 y 90, longitud entre -180 y 180, y `capacidad` debe
 
 ```http
 PUT /tachos/1
-x-cod-user: 00000001
+Authorization: Bearer <token>
 ```
 
 **Recibe** en el body uno o varios de estos campos:
@@ -342,7 +349,7 @@ Todos son opcionales individualmente, pero se debe enviar al menos uno. No se ad
 
 ```http
 DELETE /tachos/1
-x-cod-user: 00000001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** `id` como entero positivo en la ruta. No requiere body.
@@ -365,18 +372,18 @@ x-cod-user: 00000001
 
 ```http
 GET /usuarios
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** no requiere body ni parámetros.
 
-**Devuelve:** el objeto del usuario identificado por `x-cod-user`, sin contraseña. Los campos corresponden a los atributos del modelo del usuario.
+**Devuelve:** el objeto del usuario autenticado por el JWT, sin contraseña. Los campos corresponden a los atributos del modelo del usuario.
 
 ### 5.2 Consultar historial propio
 
 ```http
 GET /usuarios/me/historial?pagina=1&limite=10
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe** estos parámetros opcionales:
@@ -418,7 +425,7 @@ x-cod-user: 00001001
 
 ```http
 GET /usuarios/me/metricas
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -464,7 +471,7 @@ Los períodos se agrupan por mes en formato `YYYY-MM`.
 
 ```http
 DELETE /usuarios/2
-x-cod-user: 00000001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** `id` como id positivo del usuario en la ruta. No requiere body.
@@ -477,7 +484,7 @@ x-cod-user: 00000001
 
 ```http
 GET /premios
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -488,7 +495,7 @@ x-cod-user: 00001001
 
 ```http
 POST /premios
-x-cod-user: 00000001
+Authorization: Bearer <token>
 ```
 
 **Recibe** en el body:
@@ -510,7 +517,7 @@ x-cod-user: 00000001
 
 ```http
 POST /premios/1/canjear
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** el id del premio en la ruta. No requiere body.
@@ -545,7 +552,7 @@ x-cod-user: 00001001
 
 ```http
 GET /logros
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -556,7 +563,7 @@ x-cod-user: 00001001
 
 ```http
 POST /logros
-x-cod-user: 00000001
+Authorization: Bearer <token>
 ```
 
 **Recibe** en el body:
@@ -578,7 +585,7 @@ x-cod-user: 00000001
 
 ```http
 GET /ranking
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -617,7 +624,7 @@ El top contiene hasta diez usuarios. Cada usuario del ranking contiene `id_user`
 
 ```http
 GET /notificaciones
-x-cod-user: 00001001
+Authorization: Bearer <token>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -640,7 +647,7 @@ x-cod-user: 00001001
 
 ```http
 POST /notificaciones/sistema
-x-cod-user: 00000001
+Authorization: Bearer <token>
 ```
 
 **Recibe** en el body:

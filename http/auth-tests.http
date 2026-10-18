@@ -1,17 +1,19 @@
 @baseUrl = http://localhost:3000/api
+@userToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTIyOTI2NzQsImV4cCI6MTc5MjM3OTA3NCwiYXVkIjoiaXMyLWFwaSIsImlzcyI6ImlzMi1iYWNrZW5kIiwic3ViIjoiMTEifQ.Tm4bGMx7IzkWvKjDX6UmSHIV9lVViyJGBGd4mKX3HiY
+@adminToken = reemplaza-con-el-token-del-login-de-admin
 
 ### 1) Registro de usuario normal
 POST {{baseUrl}}/auth/registro
 Content-Type: application/json
 
 {
-  "cod_user": "20256534",
+  "cod_user": "20215643",
   "nombre": "Angello",
   "tipo": "usuario",
   "contraseña": "123456"
 }
 
-### 2) Registro de administrador
+### 2) El registro público rechaza la creación de administradores
 POST {{baseUrl}}/auth/registro
 Content-Type: application/json
 
@@ -27,11 +29,11 @@ POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "cod_user": "20230230",
+  "cod_user": "20215643",
   "contraseña": "123456"
 }
 
-### 4) Login de admin
+### 4) Login de administrador (requiere una cuenta admin provisionada previamente)
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
@@ -42,26 +44,29 @@ Content-Type: application/json
 
 ### 5) Acceso protegido para usuario
 GET {{baseUrl}}/usuarios
-x-cod-user: 20230230
+Authorization: Bearer {{userToken}}
 
 ### 6) Acceso protegido para admin
 GET {{baseUrl}}/tachos
-x-cod-user: 20240101
+Authorization: Bearer {{adminToken}}
 
 ### 7) Usuario normal intentando acceder a ruta admin
-GET {{baseUrl}}/tachos
-x-cod-user: 20230230
+POST {{baseUrl}}/tachos
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{}
 
 ### 8) Usuario inexistente
 GET {{baseUrl}}/usuarios
-x-cod-user: 00000000
+Authorization: Bearer token-invalido
 
 ### 9) Login con contraseña incorrecta
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "cod_user": "20230230",
+  "cod_user": "20256534",
   "contraseña": "passincorrecta"
 }
 
