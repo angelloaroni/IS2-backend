@@ -12,8 +12,8 @@ INSERT INTO Usuario (cod_user, id_user, nombre, puntos, tipo, contrasena, estado
 -- (Nota: capacidad como BOOL suele representar si está lleno o no, ej: FALSE = disponible/no lleno)
 INSERT INTO TachoInteligente (id_tacho, latitud, longitud, capacidad) VALUES
 (1, -12.0464, -77.0428, FALSE),
-(2, -12.0475, -77.0415, FALSE),
-(3, -12.0500, -77.0450, TRUE);
+(2, -12.0464, -77.0428, FALSE),
+(3, -12.0464, -77.0428, FALSE);
 
 -- Inserción de Logros
 INSERT INTO Logros (id_logro, nombre, tipo_condicion, valor_objetivo) VALUES
@@ -34,10 +34,10 @@ INSERT INTO Premio (id_premio, nombre, descripcion, costo, stock) VALUES
 
 -- Inserción de Residuos
 INSERT INTO Residuo (id_residuo, peso, tipo, id_user, id_tacho) VALUES
-(1, 0.25, 'Plástico', 1, 1),
-(2, 0.15, 'Metal', 1, 1),
-(3, 0.50, 'Papel', 2, 2),
-(4, 0.40, 'Vidrio', 3, 3);
+(1, 0.25, 'plastico', 1, 1),
+(2, 0.15, 'papel/carton', 1, 1),
+(3, 0.50, 'organico', 2, 2),
+(4, 0.40, 'vidrio', 3, 3);
 
 -- Inserción de Logros de Usuario
 INSERT INTO Logros_Usuario (fecha_obtencion, id_logro, id_user) VALUES

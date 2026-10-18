@@ -144,6 +144,34 @@ export async function obtenerTacho(id) {
     return serializarTacho(await tachoRepository.buscarActivoPorId(idTacho));
 }
 
+export async function actualizarEstadoTacho(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new AppError('El estado del tacho no es válido', 400);
+    }
+    const camposPermitidos = ['idTacho', 'latitud', 'longitud', 'capacidad'];
+    if (Object.keys(data).some((key) => !camposPermitidos.includes(key))) {
+        throw new AppError('El estado del tacho contiene campos no permitidos', 400);
+    }
+    if (camposPermitidos.some((key) => data[key] === undefined)) {
+        throw new AppError('El estado del tacho debe incluir idTacho, latitud, longitud y capacidad', 400);
+    }
+
+    const idTacho = Number(data.idTacho);
+    if (!Number.isInteger(idTacho) || idTacho <= 0) {
+        throw new AppError('El id del tacho no es válido', 400);
+    }
+    const coordenadas = validarCoordenadas(data.latitud, data.longitud);
+    const capacidad = validarCapacidad(data.capacidad);
+    const tacho = await tachoRepository.actualizar(idTacho, { ...coordenadas, capacidad });
+
+    return {
+        idTacho: tacho.id_tacho,
+        latitud: tacho.latitud,
+        longitud: tacho.longitud,
+        capacidad: tacho.capacidad,
+    };
+}
+
 export async function agregarTacho(data) {
     validarDatos(data);
     const coordenadas = validarCoordenadas(data.latitud, data.longitud);

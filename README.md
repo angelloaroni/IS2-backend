@@ -22,9 +22,22 @@ Nota: este `README` solo contiene instrucciones de formato. Para más detalles, 
 
 ### Recepción de datos del tacho
 
-`POST /api/tachos/recepcion` se autentica por separado del usuario mediante el header `x-tacho-api-key`, configurado en `TACHO_API_KEY`. El servidor obtiene la fecha y los puntos; el tacho no debe enviarlos.
+Los datos de los tachos se reciben por MQTT desde el broker Mosquitto en `192.168.18.143:1883` por defecto. El backend se suscribe a `smartbin/status` para el estado del tacho y a `smartbin/recycle` para eventos de reciclaje. La URL y los temas se pueden sobrescribir con `MQTT_BROKER_URL`, `MQTT_TOPIC_TACHO_ESTADO` y `MQTT_TOPIC_EVENTO_RECICLAJE`. Si el broker requiere autenticación, configura conjuntamente `MQTT_USERNAME` y `MQTT_PASSWORD`.
 
-El cuerpo JSON acordado es:
+El tema `smartbin/status` recibe el identificador, ubicación y capacidad actual del tacho:
+
+```json
+{
+  "idTacho": 1,
+  "latitud": -12.0464,
+  "longitud": -77.0428,
+  "capacidad": true
+}
+```
+
+El tacho debe existir y estar activo. Estos datos actualizan sus campos en la tabla `TachoInteligente`; `capacidad` es un booleano y no modifica el estado administrativo/activo del tacho.
+
+El tema `smartbin/recycle` recibe:
 
 ```json
 {
@@ -36,4 +49,4 @@ El cuerpo JSON acordado es:
 }
 ```
 
-Los tipos aceptados son `plastico`, `papel/carton` y `organicos`. `idEvento` se usa como clave de idempotencia; reutilizarla no vuelve a registrar el residuo ni sumar puntos.
+Los tipos aceptados son `plastico`, `papel/carton` y `organicos`. `idEvento` se usa como clave de idempotencia; reutilizarla no vuelve a registrar el residuo ni sumar puntos. El servidor resuelve el usuario a partir de `codUser`, verifica que el usuario y el tacho estén activos, y obtiene la fecha y los puntos; el tacho no debe enviarlos. La antigua ruta HTTP `POST /api/tachos/recepcion` ya no está disponible.

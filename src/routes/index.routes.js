@@ -1,6 +1,6 @@
 import {Router} from 'express';
 
-import authMiddleware, {authTachoMiddleware, authorizeRoles} from '../middlewares/auth.middleware.js';
+import authMiddleware, {authorizeRoles} from '../middlewares/auth.middleware.js';
 import authRoutes from './auth.routes.js';
 import usuarioRoutes from './usuario.routes.js';
 import residuosRoutes from './residuos.routes.js';
@@ -10,7 +10,6 @@ import tachoRoutes from './tacho.routes.js';
 import rankingRoutes from './ranking.routes.js';
 import logrosRoutes from './logro.routes.js';
 import notificacionRoutes from './notificacion.routes.js';
-import { recibirJSONTacho } from '../controllers/residuo.controller.js';
 
 const router = Router();
 
@@ -20,7 +19,6 @@ router.use('/usuarios', authMiddleware, authorizeRoles(['admin', 'usuario']), us
 router.use('/residuos', authMiddleware, authorizeRoles(['admin', 'usuario']), residuosRoutes);
 router.use('/residuo', authMiddleware, authorizeRoles(['admin', 'usuario']), residuoRoutes);
 router.use('/premios', authMiddleware, authorizeRoles(['admin', 'usuario']), premiosRoutes);
-router.post('/tachos/recepcion', authTachoMiddleware, recibirJSONTacho);
 router.use('/tachos', authMiddleware, tachoRoutes);
 router.use('/ranking', authMiddleware, authorizeRoles(['admin', 'usuario']), rankingRoutes);
 router.use('/logros', authMiddleware, authorizeRoles(['admin', 'usuario']), logrosRoutes);

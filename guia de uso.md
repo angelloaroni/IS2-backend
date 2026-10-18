@@ -38,12 +38,6 @@ Configura `JWT_SECRET` en el entorno del servidor con al menos 32 bytes aleatori
 
 El registro público solo permite crear cuentas de tipo `usuario`. Las cuentas `admin` deben provisionarse por un proceso administrativo confiable (por ejemplo, promoviendo una cuenta desde un proceso con acceso controlado a la base de datos), nunca enviando `"tipo": "admin"` al registro.
 
-La ruta de recepción de tachos se autentica por separado y usa:
-
-```http
-x-tacho-api-key: <clave configurada para el servidor>
-```
-
 ## 1. Registro e inicio de sesión
 
 ### 1.1 Registrar usuario
@@ -184,12 +178,30 @@ Para nuevas integraciones, utiliza `POST /residuos`.
 
 ## 3. Recepción de datos enviados por un tacho
 
-```http
-POST /tachos/recepcion
-x-tacho-api-key: <clave configurada>
+El servidor se suscribe al broker Mosquitto al iniciar. Configura el broker y los temas en el entorno:
+
+```dotenv
+MQTT_BROKER_URL=mqtt://192.168.18.143:1883
+MQTT_TOPIC_TACHO_ESTADO=smartbin/status
+MQTT_TOPIC_EVENTO_RECICLAJE=smartbin/recycle
+MQTT_USERNAME=
+MQTT_PASSWORD=
 ```
 
-**Recibe** en el body:
+El usuario y la contraseña son opcionales, pero deben configurarse juntos. El tema `smartbin/status` recibe:
+
+```json
+{
+  "idTacho": 1,
+  "latitud": -12.0464,
+  "longitud": -77.0428,
+  "capacidad": true
+}
+```
+
+El tacho debe existir y estar activo. El backend persiste `latitud`, `longitud` y `capacidad` en la tabla `TachoInteligente`. `capacidad` es un booleano; `true` indica que alcanzó su capacidad. Este mensaje no cambia el estado administrativo del tacho.
+
+El tema `smartbin/recycle` recibe:
 
 ```json
 {
@@ -201,33 +213,7 @@ x-tacho-api-key: <clave configurada>
 }
 ```
 
-| Campo | Tipo | Requisito |
-|---|---|---|
-| `idEvento` | string | Obligatorio, no vacío y máximo 128 caracteres; identifica el evento. |
-| `codUser` | string | Exactamente ocho dígitos; identifica al usuario. |
-| `idTacho` | entero | Id del tacho que se registra. Debe estar activo. |
-| `tipo` | string | `plastico`, `papel/carton` u `organicos`. |
-| `peso` | número | Finito y mayor que cero. |
-
-No se admiten otros campos en este body. El servidor obtiene el usuario a partir de `codUser`, genera la fecha y calcula los puntos. `idEvento` funciona como clave de idempotencia.
-
-**Devuelve** HTTP 201: la misma estructura que el registro de residuos de cliente:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "idResiduo": 26,
-    "peso": 0.5,
-    "tipo": "papel/carton",
-    "idUser": 1,
-    "idTacho": 1,
-    "puntosGanados": 5,
-    "fecha": "2026-10-17T20:00:00.000Z"
-  },
-  "error": null
-}
-```
+`idEvento` funciona como clave de idempotencia. El backend valida y procesa el evento con las mismas reglas que el registro autenticado: resuelve el usuario por `codUser`, verifica usuario y tacho activos, y calcula puntos y fecha. MQTT QoS 1 permite la entrega al menos una vez; un evento repetido no vuelve a sumar puntos. La antigua ruta HTTP `POST /tachos/recepcion` ya no está disponible.
 
 ## 4. Tachos
 

@@ -190,15 +190,32 @@ Después del commit se emite el evento `residuo.registrado`. Sus consumidores in
 
 ## 6. Recepción del tacho inteligente
 
-`POST /api/tachos/recepcion` usa una autenticación independiente a la del usuario:
+El backend se suscribe al broker Mosquitto al iniciar. La conexión y los dos temas se configuran mediante:
 
-```http
-x-tacho-api-key: <valor configurado en TACHO_API_KEY>
+```dotenv
+MQTT_BROKER_URL=mqtt://192.168.18.143:1883
+MQTT_TOPIC_TACHO_ESTADO=smartbin/status
+MQTT_TOPIC_EVENTO_RECICLAJE=smartbin/recycle
+MQTT_USERNAME=
+MQTT_PASSWORD=
 ```
 
-La comparación de la clave se hace con `timingSafeEqual`. Si `TACHO_API_KEY` no está configurada, el endpoint devuelve un error de configuración; si falta o no coincide la clave enviada, responde `401`.
+El usuario y la contraseña son opcionales, pero deben configurarse juntos. Protege el broker con autenticación y ACL para limitar qué dispositivos pueden publicar en estos temas; en redes no confiables, usa MQTT sobre TLS (`mqtts://`).
 
-El JSON aceptado contiene exclusivamente:
+El tema `smartbin/status` recibe el identificador, coordenadas y capacidad del tacho:
+
+```json
+{
+  "idTacho": 1,
+  "latitud": -12.0464,
+  "longitud": -77.0428,
+  "capacidad": true
+}
+```
+
+El tacho debe existir y estar activo. El mensaje actualiza `latitud`, `longitud` y `capacidad` en la tabla `TachoInteligente`, pero no su estado administrativo (`estado`), utilizado para habilitarlo o darlo de baja.
+
+El tema `smartbin/recycle` recibe exclusivamente:
 
 ```json
 {
@@ -210,9 +227,7 @@ El JSON aceptado contiene exclusivamente:
 }
 ```
 
-`idEvento` es obligatorio y se usa como clave de idempotencia; `codUser` debe contener ocho dígitos; el usuario y tacho deben estar activos. El servidor resuelve el usuario, genera la fecha y calcula los puntos. No se admiten campos adicionales en este mensaje.
-
-La API key configurada es compartida por esta integración; el código no administra claves individuales por tacho. No la pongas en aplicaciones cliente públicas ni en repositorios.
+`idEvento` es obligatorio y se usa como clave de idempotencia; `codUser` debe contener ocho dígitos; el usuario y el tacho deben estar activos. El servidor resuelve el usuario, genera la fecha y calcula los puntos. No se admiten campos adicionales en este mensaje. MQTT QoS 1 permite la entrega al menos una vez; un `idEvento` repetido no vuelve a registrar el residuo ni sumar puntos.
 
 ## 7. Otras reglas de negocio y fórmulas
 
@@ -281,7 +296,8 @@ Todas las rutas siguientes están bajo el prefijo `/api`.
 | `/usuarios`, `/residuos`, `/residuo`, `/premios`, `/ranking`, `/logros`, `/notificaciones` | Requieren JWT y usuario activo; cada operación puede aplicar autorización adicional por rol. |
 | `GET /tachos`, `GET /tachos/cercanos`, `GET /tachos/:id` | Requieren JWT. |
 | `POST /tachos`, `PUT /tachos/:id`, `DELETE /tachos/:id` | Requieren JWT con rol `admin`. |
-| `POST /tachos/recepcion` | Usa `x-tacho-api-key`; además valida la identidad del usuario indicado en el payload y el estado del tacho. |
+| `MQTT_TOPIC_TACHO_ESTADO` | Actualiza la capacidad de un tacho a partir del JSON MQTT. |
+| `MQTT_TOPIC_EVENTO_RECICLAJE` | Registra el reciclaje indicado en el JSON MQTT; el backend se suscribe al iniciar. |
 
 Las rutas concretas y su implementación se encuentran en `src/routes/` y `src/controllers/`.
 
@@ -295,7 +311,6 @@ Las rutas concretas y su implementación se encuentran en `src/routes/` y `src/c
 - Autorización por roles en operaciones administrativas.
 - Registro público limitado al rol `usuario`.
 - No se serializan contraseñas en las respuestas de autenticación.
-- Comparación de la API key del tacho en tiempo constante.
 - Consultas de métricas con reemplazos parametrizados de Sequelize.
 - Transacciones para registro de residuos y canjes; restricción única para idempotencia.
 - `.env` excluido por `.gitignore`.
@@ -308,9 +323,9 @@ Las rutas concretas y su implementación se encuentran en `src/routes/` y `src/c
 - El registro solo exige contraseña no vacía y respeta el límite de 72 bytes; no aplica longitud mínima ni comprobación de contraseñas comunes.
 - El cliente puede declarar el peso en el endpoint de residuos. Para conceder puntos reales, valida la medición desde una fuente confiable y define límites físicos/de negocio en el servidor.
 - La verificación TLS de PostgreSQL en la rama `DATABASE_URL` está desactivada (`rejectUnauthorized: false`). No uses esa configuración como garantía de identidad del servidor en conexiones remotas.
-- La API key del tacho es estática y compartida. Si se filtra, rótala y considera credenciales por dispositivo si el modelo de despliegue lo requiere.
+- La autenticación y los permisos de publicación dependen de la configuración del broker MQTT; habilita credenciales, ACL y TLS cuando corresponda.
 - No se implementa refresh token ni endpoint de logout/revocación individual. La rotación de `JWT_SECRET` invalida todos los tokens, pero también cierra las sesiones legítimas.
-- Evita poner contraseñas, `JWT_SECRET`, tokens, `TACHO_API_KEY` o credenciales de PostgreSQL en capturas, chats, tickets, logs o control de versiones.
+- Evita poner contraseñas, `JWT_SECRET`, tokens, credenciales MQTT o de PostgreSQL en capturas, chats, tickets, logs o control de versiones.
 
 ## 10. Probar el comportamiento
 
