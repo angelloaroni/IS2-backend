@@ -18,6 +18,11 @@ const TachoInteligente = sequelize.define('TachoInteligente', {
 	capacidad: {
 		type: DataTypes.BOOLEAN,
 		allowNull: false
+	},
+	estado: {
+		type: DataTypes.BOOLEAN,
+		allowNull: false,
+		defaultValue: true
 	}
 }, {
 	tableName: 'tachointeligente',

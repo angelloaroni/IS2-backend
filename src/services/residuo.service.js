@@ -1,83 +1,132 @@
-import eventos, { EVENTOS } from '../utils/eventos.js';
 import sequelize from '../config/db.js';
 import AppError from '../utils/AppError.js';
-import Residuo from '../models/Residuo.js';
-import HistorialReciclaje from '../models/HistorialReciclaje.js';
-import Usuario from '../models/Usuario.js';
-import { calcularPuntos } from '../formulas/calcularPuntos.js';
+import eventos, { EVENTOS } from '../utils/eventos.js';
+import historialRepository from '../repositories/historial.repository.js';
+import residuoRepository from '../repositories/residuo.repository.js';
+import tachoRepository from '../repositories/tacho.repository.js';
+import UsuarioRepository from '../repositories/usuario.repository.js';
+import { calcularPuntos, validarRegistroResiduo } from './puntos.service.js';
 
-async function siguienteId(modelo, campo, tabla, transaction) {
-  await sequelize.query(`LOCK TABLE "${tabla}" IN EXCLUSIVE MODE`, { transaction });
-  const ultimoId = await modelo.max(campo, { transaction });
-  return Number(ultimoId ?? 0) + 1;
+function validarMensajeTacho(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new AppError('El JSON del tacho no es válido', 400);
+  }
+
+  const camposPermitidos = new Set(['idEvento', 'codUser', 'idTacho', 'tipo', 'peso']);
+  if (Object.keys(data).some((campo) => !camposPermitidos.has(campo))) {
+    throw new AppError('El JSON del tacho contiene campos no permitidos', 400);
+  }
+
+  if (
+    typeof data.codUser !== 'string'
+    || !/^\d{8}$/.test(data.codUser)
+  ) {
+    throw new AppError('codUser debe contener exactamente 8 dígitos', 400);
+  }
+  if (
+    typeof data.idEvento !== 'string'
+    || !data.idEvento.trim()
+    || data.idEvento.trim().length > 128
+  ) {
+    throw new AppError('idEvento es obligatorio y debe tener hasta 128 caracteres', 400);
+  }
+
+  return {
+    idEvento: data.idEvento.trim(),
+    codUser: data.codUser,
+    idTacho: data.idTacho,
+    tipo: data.tipo,
+    peso: data.peso,
+  };
+}
+
+export async function procesarJSONTacho(data) {
+  const mensaje = validarMensajeTacho(data);
+  const usuarioRepository = new UsuarioRepository();
+  const usuario = await usuarioRepository.buscarPorCodigo(mensaje.codUser);
+
+  if (!usuario || usuario.estado !== true) {
+    throw new AppError('Usuario no encontrado o inactivo', 404);
+  }
+
+  return registrarResiduo({
+    idUser: usuario.id_user,
+    idTacho: mensaje.idTacho,
+    tipo: mensaje.tipo,
+    peso: mensaje.peso,
+    idempotencyKey: mensaje.idEvento,
+  });
 }
 
 export async function registrarResiduo(data) {
-  const { idUser, idTacho, tipo, peso } = data;
-
-  if (!idUser || !idTacho || !tipo || peso === undefined || peso === null) {
-    throw new AppError('Faltan datos obligatorios', 400);
-  }
-
-  const pesoNumero = Number(peso);
-  if (!Number.isFinite(pesoNumero) || pesoNumero <= 0) {
-    throw new AppError('El peso debe ser mayor a cero', 400);
-  }
+  const registro = validarRegistroResiduo(data);
+  const { idUser, idTacho, tipo, peso, idempotencyKey } = registro;
+  const usuarioRepository = new UsuarioRepository();
 
   const transaction = await sequelize.transaction();
 
   try {
-    const idResiduo = await siguienteId(Residuo, 'id_residuo', 'residuo', transaction);
-    const residuo = await Residuo.create({
-      id_residuo: idResiduo,
-      peso: pesoNumero,
-      tipo: String(tipo),
-      id_user: Number(idUser),
-      id_tacho: Number(idTacho),
+    const existente = await residuoRepository.buscarPorClaveIdempotencia(
+      idempotencyKey,
+      { transaction }
+    );
+    if (existente) {
+      throw new AppError('La clave de idempotencia ya fue utilizada', 409);
+    }
+
+    const usuario = await usuarioRepository.buscarPorId(idUser, { transaction });
+    if (usuario.estado !== true) {
+      throw new AppError('El usuario está inactivo', 403);
+    }
+    await tachoRepository.buscarActivoPorId(idTacho, { transaction });
+
+    const fecha = new Date();
+    const puntosGanados = calcularPuntos(peso, tipo);
+    const residuo = await residuoRepository.crear({
+      peso,
+      tipo,
+      idempotency_key: idempotencyKey,
+      id_user: idUser,
+      id_tacho: idTacho,
     }, { transaction });
 
-    const idHistorial = await siguienteId(
-      HistorialReciclaje,
-      'id_historial',
-      'historialreciclaje',
-      transaction
-    );
-    await HistorialReciclaje.create({
-      id_historial: idHistorial,
-      fecha: new Date(),
-      id_user: Number(idUser),
-      id_tacho: Number(idTacho),
+    await historialRepository.crear({
+      fecha,
+      id_user: idUser,
+      id_tacho: idTacho,
       id_residuo: residuo.id_residuo,
     }, { transaction });
 
-    const puntosGanados = calcularPuntos(pesoNumero);
-    const fecha = new Date();
-
-    await Usuario.increment('puntos', {
-      by: puntosGanados,
-      where: { id_user: Number(idUser) },
-      transaction,
-    });
+    await usuarioRepository.sumarPuntos(idUser, puntosGanados, { transaction });
 
     await transaction.commit();
 
     eventos.emit(EVENTOS.RESIDUO_REGISTRADO, {
-      idUser: Number(idUser),
+      idUser,
       idResiduo: residuo.id_residuo,
-      idTacho: Number(idTacho),
-      tipo: String(tipo),
-      peso: pesoNumero,
+      idTacho,
+      tipo,
+      peso,
       puntosGanados,
       fecha,
     });
 
     return {
-      ...residuo.toJSON(),
+      idResiduo: residuo.id_residuo,
+      peso: residuo.peso,
+      tipo: residuo.tipo,
+      idUser: residuo.id_user,
+      idTacho: residuo.id_tacho,
       puntosGanados,
       fecha,
     };
   } catch (error) {
-    await transaction.rollback();
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      throw new AppError('La clave de idempotencia ya fue utilizada', 409);
+    }
     throw error;
   }
 }

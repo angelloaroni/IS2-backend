@@ -12,8 +12,13 @@ const Residuo = sequelize.define('Residuo', {
 		allowNull: false
 	},
 	tipo: {
-		type: DataTypes.STRING,
+		type: DataTypes.STRING(32),
 		allowNull: false
+	},
+	idempotency_key: {
+		type: DataTypes.STRING(128),
+		allowNull: true,
+		unique: true
 	},
 	id_user: {
 		type: DataTypes.INTEGER,

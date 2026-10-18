@@ -18,6 +18,7 @@ CREATE TABLE TachoInteligente
   latitud FLOAT NOT NULL,
   longitud FLOAT NOT NULL,
   capacidad BOOL NOT NULL,
+  estado BOOL NOT NULL DEFAULT TRUE,
   PRIMARY KEY (id_tacho)
 );
 
@@ -26,6 +27,7 @@ CREATE TABLE Residuo
   id_residuo INT NOT NULL,
   peso FLOAT NOT NULL,
   tipo VARCHAR NOT NULL,
+  idempotency_key VARCHAR(128) UNIQUE,
   id_user INT NOT NULL,
   id_tacho INT NOT NULL,
   PRIMARY KEY (id_residuo),

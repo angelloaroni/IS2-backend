@@ -1,5 +1,7 @@
+import { timingSafeEqual } from 'node:crypto';
 import Usuario from '../models/Usuario.js';
 import { fallo } from '../utils/respuesta.js';
+import AppError from '../utils/AppError.js';
 
 export default async function authMiddleware(req, res, next) {
     try {
@@ -40,6 +42,29 @@ export default async function authMiddleware(req, res, next) {
         console.error(error);
         return fallo(res, 'Error de autenticación', 500);
     }
+}
+
+export function authTachoMiddleware(req, res, next) {
+    const apiKeyConfigurada = process.env.TACHO_API_KEY;
+    if (!apiKeyConfigurada) {
+        return next(new AppError('La autenticación del tacho no está configurada', 500));
+    }
+
+    const apiKeyRecibida = req.get('x-tacho-api-key');
+    if (typeof apiKeyRecibida !== 'string') {
+        return fallo(res, 'Autenticación del tacho requerida', 401);
+    }
+
+    const claveEsperada = Buffer.from(apiKeyConfigurada);
+    const claveRecibida = Buffer.from(apiKeyRecibida);
+    if (
+        claveEsperada.length !== claveRecibida.length
+        || !timingSafeEqual(claveEsperada, claveRecibida)
+    ) {
+        return fallo(res, 'Clave API del tacho inválida', 401);
+    }
+
+    return next();
 }
 
 export function authorizeRoles(...rolesPermitidos) {

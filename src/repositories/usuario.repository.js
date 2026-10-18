@@ -15,8 +15,16 @@ class UsuarioRepository extends RepositoryBase {
         return this.model.create(data);
     }
 
-    async buscarPorId(id) {
-        return this.findById(id);
+    async buscarPorId(id, { transaction = null } = {}) {
+        const options = { transaction };
+        if (transaction) {
+            options.lock = transaction.LOCK.UPDATE;
+        }
+        const usuario = await this.model.findByPk(id, options);
+        if (!usuario) {
+            throw new AppError('No se ha encontrado el usuario', 404);
+        }
+        return usuario;
     }
 
     async desactivarPorId(id) {
@@ -27,14 +35,10 @@ class UsuarioRepository extends RepositoryBase {
         return usuario;
     }
 
-    async sumarPuntos(id, puntos) {
-        const usuario = await this.model.findByPk(id);
-        if (!usuario) {
-            throw new AppError('No se ha encontrado el usuario', 404);
-        }
-
-        await usuario.increment('puntos', { by: puntos });
-        return usuario.reload();
+    async sumarPuntos(id, puntos, { transaction = null } = {}) {
+        const usuario = await this.buscarPorId(id, { transaction });
+        await usuario.increment('puntos', { by: puntos, transaction });
+        return usuario.reload({ transaction });
     }
 
     async restarPuntos(id, puntos) {
