@@ -3,7 +3,7 @@ import { actualizarEstadoTacho } from './tacho.service.js';
 import { procesarJSONTacho } from './residuo.service.js';
 
 export function iniciarRecepcionMqtt() {
-    const url = process.env.MQTT_BROKER_URL || 'mqtt://192.168.18.143:1883';
+    const url = process.env.MQTT_BROKER_URL || 'mqtt://192.168.0.105:1883';
     const temaEstado = process.env.MQTT_TOPIC_TACHO_ESTADO || 'smartbin/status';
     const temaReciclaje = process.env.MQTT_TOPIC_EVENTO_RECICLAJE || 'smartbin/recycle';
 
