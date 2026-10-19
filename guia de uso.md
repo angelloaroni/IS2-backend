@@ -310,7 +310,7 @@ MQTT_USERNAME=
 MQTT_PASSWORD=
 ```
 
-Usa la URL del broker asignada a tu entorno; la anterior es el valor de ejemplo. El usuario y la contraseña son opcionales, pero deben configurarse juntos. El backend valida que `MQTT_USERNAME` y `MQTT_PASSWORD` no queden mezclados: si uno está definido, el otro también debe estarlo. Los temas de estado y reciclaje no pueden ser iguales.
+La URL del broker y los temas anteriores corresponden a la configuración actual del proyecto. Si ya están definidos en `.env`, no necesitas cambiarlos para usar los formatos JSON de esta sección. El usuario y la contraseña son opcionales, pero deben configurarse juntos. El backend valida que `MQTT_USERNAME` y `MQTT_PASSWORD` no queden mezclados: si uno está definido, el otro también debe estarlo. Los temas de estado y reciclaje no pueden ser iguales.
 
 ### 3.1 Tema `smartbin/status`
 
@@ -837,7 +837,13 @@ Códigos usados por la API:
 - Para generar una contraseña de aplicación, inicia sesión con la cuenta que se usará como remitente, activa la verificación en dos pasos y crea una contraseña con un nombre reconocible, por ejemplo `Tachín Verde Backend`. Algunas cuentas institucionales tienen esta función bloqueada por políticas de Google Workspace; en ese caso, solicita al administrador de la institución el método de envío aprobado. Consulta la [ayuda oficial de Google sobre contraseñas de aplicación](https://support.google.com/accounts/answer/185833?hl=es).
 - Si aparece `535-5.7.8 Username and Password not accepted`, comprueba que `SMTP_USER` sea el correo completo correcto, que la contraseña de aplicación se haya copiado sin espacios y que corresponda a esa misma cuenta. Verifica también que Google Workspace permita contraseñas de aplicación. Si la credencial se compartió o expuso, revócala en la cuenta Google y genera otra. `SMTP_USER` y `SMTP_PASSWORD` deben configurarse juntos; los códigos no se enviarán si falta SMTP o falla la autenticación.
 - Después de cambiar el `.env`, reinicia el backend. El envío de los códigos de verificación requiere SMTP funcional.
-- Ejecuta una vez cada migración pendiente en la base existente: `database/migrations/20261018_add_email_and_recovery_verification.sql` y `database/migrations/20261018_add_tacho_status_fields.sql`. La primera habilita correo/verificación de cuenta; la segunda agrega `tipo` y `porcentaje` al estado del tacho.
+- Para habilitar los nuevos datos del estado MQTT en una base existente, ejecuta una vez `database/migrations/20261018_add_tacho_status_fields.sql` desde la raíz del proyecto. En PowerShell, reemplaza `usuario_postgres` y `nombre_base` por tus credenciales/nombre de base:
+
+  ```powershell
+  psql -h localhost -p 5432 -U usuario_postgres -d nombre_base -f "database\migrations\20261018_add_tacho_status_fields.sql"
+  ```
+
+- Si aún no aplicaste la migración de correo/verificación, ejecuta también una vez `database/migrations/20261018_add_email_and_recovery_verification.sql`. Las variables MQTT del `.env` no requieren cambios si el broker, temas y credenciales actuales son correctos.
 - Si se usa PostgreSQL con conexión por URL, `DATABASE_URL` puede reemplazar las variables locales; el backend usa esa URL cuando está definida.
 - El backend crea la conexión MQTT al iniciar y loguea `Suscrito a temas MQTT: ...` cuando la suscripción tiene éxito.
 - Para validar recepción real, publica un evento válido al tema `smartbin/status` o `smartbin/recycle` y revisa la base de datos o las respuestas de las rutas autenticadas.
