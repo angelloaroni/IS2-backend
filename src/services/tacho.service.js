@@ -37,11 +37,26 @@ function validarCapacidad(capacidad) {
     return capacidad;
 }
 
+function validarTipo(tipo) {
+    if (typeof tipo !== 'string' || !tipo.trim() || tipo.trim().length > 32) {
+        throw new AppError('El tipo de tacho debe contener entre 1 y 32 caracteres', 400);
+    }
+    return tipo.trim();
+}
+
+function validarPorcentaje(porcentaje) {
+    const porcentajeNumero = convertirNumero(porcentaje);
+    if (!Number.isFinite(porcentajeNumero) || porcentajeNumero < 0 || porcentajeNumero > 100) {
+        throw new AppError('El porcentaje debe ser un número entre 0 y 100', 400);
+    }
+    return porcentajeNumero;
+}
+
 function validarDatos(data) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
         throw new AppError('Los datos del tacho no son válidos', 400);
     }
-    if (Object.keys(data).some((key) => !['latitud', 'longitud', 'capacidad'].includes(key))) {
+    if (Object.keys(data).some((key) => !['tipo', 'latitud', 'longitud', 'capacidad', 'porcentaje'].includes(key))) {
         throw new AppError('Los datos incluyen campos no permitidos', 400);
     }
 }
@@ -49,9 +64,11 @@ function validarDatos(data) {
 function serializarTacho(tacho) {
     return {
         idTacho: tacho.id_tacho,
+        tipo: tacho.tipo ?? null,
         latitud: tacho.latitud,
         longitud: tacho.longitud,
         capacidad: tacho.capacidad,
+        porcentaje: tacho.porcentaje ?? null,
     };
 }
 
@@ -148,39 +165,47 @@ export async function actualizarEstadoTacho(data) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
         throw new AppError('El estado del tacho no es válido', 400);
     }
-    const camposPermitidos = ['idTacho', 'latitud', 'longitud', 'capacidad'];
+    const idCampo = Object.hasOwn(data, 'id_tacho') ? 'id_tacho' : 'idTacho';
+    const camposPermitidos = idCampo === 'id_tacho'
+        ? ['id_tacho', 'tipo', 'latitud', 'longitud', 'capacidad', 'porcentaje']
+        : ['idTacho', 'tipo', 'latitud', 'longitud', 'capacidad', 'porcentaje'];
     if (Object.keys(data).some((key) => !camposPermitidos.includes(key))) {
         throw new AppError('El estado del tacho contiene campos no permitidos', 400);
     }
-    if (camposPermitidos.some((key) => data[key] === undefined)) {
-        throw new AppError('El estado del tacho debe incluir idTacho, latitud, longitud y capacidad', 400);
+    const camposRequeridos = idCampo === 'id_tacho'
+        ? ['id_tacho', 'tipo', 'latitud', 'longitud', 'capacidad', 'porcentaje']
+        : ['idTacho', 'latitud', 'longitud', 'capacidad'];
+    if (camposRequeridos.some((key) => data[key] === undefined)) {
+        throw new AppError('El estado debe incluir todos los campos requeridos del formato MQTT', 400);
     }
 
-    const idTacho = Number(data.idTacho);
+    const idTacho = Number(data[idCampo]);
     if (!Number.isInteger(idTacho) || idTacho <= 0) {
         throw new AppError('El id del tacho no es válido', 400);
     }
     const coordenadas = validarCoordenadas(data.latitud, data.longitud);
     const capacidad = validarCapacidad(data.capacidad);
-    const tacho = await tachoRepository.actualizar(idTacho, { ...coordenadas, capacidad });
-
-    return {
-        idTacho: tacho.id_tacho,
-        latitud: tacho.latitud,
-        longitud: tacho.longitud,
-        capacidad: tacho.capacidad,
-    };
+    const cambios = { ...coordenadas, capacidad };
+    if (data.tipo !== undefined) {
+        cambios.tipo = validarTipo(data.tipo);
+    }
+    if (data.porcentaje !== undefined) {
+        cambios.porcentaje = validarPorcentaje(data.porcentaje);
+    }
+    return serializarTacho(await tachoRepository.actualizar(idTacho, cambios));
 }
 
 export async function agregarTacho(data) {
     validarDatos(data);
     const coordenadas = validarCoordenadas(data.latitud, data.longitud);
     const capacidad = validarCapacidad(data.capacidad);
+    const tipo = data.tipo === undefined ? null : validarTipo(data.tipo);
+    const porcentaje = data.porcentaje === undefined ? null : validarPorcentaje(data.porcentaje);
     const transaction = await sequelize.transaction();
 
     try {
         const tacho = await tachoRepository.crear(
-            { ...coordenadas, capacidad },
+            { tipo, ...coordenadas, capacidad, porcentaje },
             { transaction }
         );
         await transaction.commit();
@@ -208,6 +233,12 @@ export async function editarTacho(id, data) {
     }
     if (data.capacidad !== undefined) {
         cambios.capacidad = validarCapacidad(data.capacidad);
+    }
+    if (data.tipo !== undefined) {
+        cambios.tipo = validarTipo(data.tipo);
+    }
+    if (data.porcentaje !== undefined) {
+        cambios.porcentaje = validarPorcentaje(data.porcentaje);
     }
     if (Object.keys(cambios).length === 0) {
         throw new AppError('Debe enviar al menos un campo para actualizar', 400);

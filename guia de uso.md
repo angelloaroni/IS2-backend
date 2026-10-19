@@ -303,53 +303,55 @@ Para nuevas integraciones, utiliza `POST /residuos`.
 El backend se suscribe al broker Mosquitto al iniciar. La conexión y los temas se configuran en variables de entorno y pueden sobrescribirse por entorno; el cliente MQTT usa QoS 1.
 
 ```dotenv
-MQTT_BROKER_URL=mqtt://192.168.0.105:1883
+MQTT_BROKER_URL=mqtt://0.tcp.sa.ngrok.io:12467
 MQTT_TOPIC_TACHO_ESTADO=smartbin/status
 MQTT_TOPIC_EVENTO_RECICLAJE=smartbin/recycle
 MQTT_USERNAME=
 MQTT_PASSWORD=
 ```
 
-La URL del broker debe indicar el host y puerto del broker real. El usuario y la contraseña son opcionales, pero deben configurarse juntos. El backend valida que `MQTT_USERNAME` y `MQTT_PASSWORD` no queden mezclados: si uno está definido, el otro también debe estarlo. Los temas de estado y reciclaje no pueden ser iguales.
+Usa la URL del broker asignada a tu entorno; la anterior es el valor de ejemplo. El usuario y la contraseña son opcionales, pero deben configurarse juntos. El backend valida que `MQTT_USERNAME` y `MQTT_PASSWORD` no queden mezclados: si uno está definido, el otro también debe estarlo. Los temas de estado y reciclaje no pueden ser iguales.
 
 ### 3.1 Tema `smartbin/status`
 
-El dispositivo publica el estado y la ubicación del tacho:
+El dispositivo publica un objeto JSON con todos estos campos:
 
 ```json
 {
-  "idTacho": 1,
+  "id_tacho": 1,
+  "tipo": "plastico",
   "latitud": -12.0464,
   "longitud": -77.0428,
-  "capacidad": true
+  "capacidad": true,
+  "porcentaje": 100
 }
 ```
 
-El backend valida que el JSON contenga exactamente esos campos, que `idTacho` sea positivo, que las coordenadas estén dentro de su rango válido y que `capacidad` sea booleano. Si el tacho existe y está activo, actualiza `latitud`, `longitud` y `capacidad` en la tabla `TachoInteligente`.
+`id_tacho` debe ser un entero positivo; `tipo` texto de 1 a 32 caracteres; latitud y longitud deben estar dentro de sus rangos geográficos; `capacidad` debe ser booleano y `porcentaje` un número entre 0 y 100. El backend actualiza esos datos del tacho activo en la tabla `TachoInteligente`. `porcentaje` se guarda numéricamente en una escala de 0 a 100.
 
-`capacidad` es un booleano; `true` indica que alcanzó su capacidad. Este mensaje no cambia el estado administrativo del tacho (`estado`) ni el `id_tacho`.
+`capacidad: true` indica que el dispositivo reporta el tacho lleno. Este mensaje no cambia el estado administrativo del tacho (`estado`). El backend persiste el estado recibido; **no envía alertas por correo** cuando el tacho se llena.
 
 ### 3.2 Tema `smartbin/recycle`
 
-El dispositivo publica un evento de reciclaje:
+El dispositivo publica un objeto JSON con este formato:
 
 ```json
 {
-  "idEvento": "tacho-1-event-000045",
+  "idtacho": 1,
+  "evento": "tacho-1-event-000045",
   "codUser": "00001001",
-  "idTacho": 1,
   "tipo": "papel/carton",
   "peso": 0.5
 }
 ```
 
-`idEvento` funciona como clave de idempotencia. El backend valida el JSON, resuelve el usuario por `codUser`, verifica que usuario y tacho estén activos, calcula puntos y registra el residuo en la misma transacción.
+`evento` debe ser un identificador único por reciclaje; el backend lo guarda como clave de idempotencia. `codUser` debe tener ocho dígitos. El backend normaliza `idtacho` al identificador interno, resuelve el usuario por `codUser`, verifica que usuario y tacho estén activos, calcula puntos y registra el residuo en la misma transacción.
 
-Si el mismo evento llega más de una vez (por ejemplo por QoS 1), la clave `idEvento` ya existente evita volver a insertar el residuo ni sumar puntos. La ruta HTTP antigua `POST /api/tachos/recepcion` ya no está disponible; el flujo MQTT reemplaza ese mecanismo.
+Si el mismo `evento` llega más de una vez (por ejemplo por QoS 1), no se vuelve a insertar el residuo ni a sumar puntos. La ruta HTTP antigua `POST /api/tachos/recepcion` ya no está disponible; el flujo MQTT reemplaza ese mecanismo.
 
 ## 4. Tachos
 
-Las respuestas serializadas de tacho contienen `idTacho`, `latitud`, `longitud` y `capacidad`.
+Las respuestas serializadas de tacho contienen `idTacho`, `tipo`, `latitud`, `longitud`, `capacidad` y `porcentaje`. En tachos existentes que aún no hayan recibido los campos nuevos de estado, `tipo` y `porcentaje` pueden ser `null`.
 
 Los usuarios autenticados pueden consultar el listado, buscar por id y buscar cercanos. La creación, edición y baja de tachos requieren rol `admin`.
 
@@ -370,9 +372,11 @@ Authorization: Bearer <jwt>
   "data": [
     {
       "idTacho": 1,
+      "tipo": "plastico",
       "latitud": -12.0464,
       "longitud": -77.0428,
-      "capacidad": false
+      "capacidad": false,
+      "porcentaje": 25
     }
   ],
   "error": null
@@ -388,7 +392,7 @@ Authorization: Bearer <jwt>
 
 **Recibe:** `id` como entero positivo en la ruta.
 
-**Devuelve:** un objeto de tacho con `idTacho`, `latitud`, `longitud` y `capacidad`.
+**Devuelve:** un objeto de tacho con `idTacho`, `tipo`, `latitud`, `longitud`, `capacidad` y `porcentaje`.
 
 ### 4.3 Buscar tachos cercanos
 
@@ -413,9 +417,11 @@ Authorization: Bearer <jwt>
   "data": [
     {
       "idTacho": 1,
+      "tipo": "plastico",
       "latitud": -12.0464,
       "longitud": -77.0428,
       "capacidad": false,
+      "porcentaje": 25,
       "distanciaM": 0
     }
   ],
@@ -434,13 +440,15 @@ Authorization: Bearer <jwt>
 
 ```json
 {
+  "tipo": "plastico",
   "latitud": -12.0464,
   "longitud": -77.0428,
-  "capacidad": false
+  "capacidad": false,
+  "porcentaje": 0
 }
 ```
 
-Latitud debe estar entre -90 y 90, longitud entre -180 y 180, y `capacidad` debe ser `true` o `false`.
+`tipo` y `porcentaje` son opcionales en las operaciones administrativas. Si se envía `porcentaje`, debe estar entre 0 y 100. Latitud debe estar entre -90 y 90, longitud entre -180 y 180, y `capacidad` debe ser `true` o `false`.
 
 **Devuelve** HTTP 201: el tacho creado, incluyendo el `idTacho` asignado.
 
@@ -457,13 +465,14 @@ Authorization: Bearer <jwt>
 {
   "latitud": -12.047,
   "longitud": -77.041,
-  "capacidad": true
+  "capacidad": true,
+  "porcentaje": 80
 }
 ```
 
-Todos son opcionales individualmente, pero se debe enviar al menos uno. No se admiten campos adicionales.
+`tipo`, `latitud`, `longitud`, `capacidad` y `porcentaje` son opcionales individualmente, pero se debe enviar al menos uno. No se admiten campos adicionales.
 
-**Devuelve:** el tacho actualizado con `idTacho`, `latitud`, `longitud` y `capacidad`.
+**Devuelve:** el tacho actualizado con `idTacho`, `tipo`, `latitud`, `longitud`, `capacidad` y `porcentaje`.
 
 ### 4.6 Dar de baja tacho
 
@@ -828,7 +837,7 @@ Códigos usados por la API:
 - Para generar una contraseña de aplicación, inicia sesión con la cuenta que se usará como remitente, activa la verificación en dos pasos y crea una contraseña con un nombre reconocible, por ejemplo `Tachín Verde Backend`. Algunas cuentas institucionales tienen esta función bloqueada por políticas de Google Workspace; en ese caso, solicita al administrador de la institución el método de envío aprobado. Consulta la [ayuda oficial de Google sobre contraseñas de aplicación](https://support.google.com/accounts/answer/185833?hl=es).
 - Si aparece `535-5.7.8 Username and Password not accepted`, comprueba que `SMTP_USER` sea el correo completo correcto, que la contraseña de aplicación se haya copiado sin espacios y que corresponda a esa misma cuenta. Verifica también que Google Workspace permita contraseñas de aplicación. Si la credencial se compartió o expuso, revócala en la cuenta Google y genera otra. `SMTP_USER` y `SMTP_PASSWORD` deben configurarse juntos; los códigos no se enviarán si falta SMTP o falla la autenticación.
 - Después de cambiar el `.env`, reinicia el backend. El envío de los códigos de verificación requiere SMTP funcional.
-- Ejecuta una vez `database/migrations/20261018_add_email_and_recovery_verification.sql` en la base existente. La columna de correo permite `NULL` para conservar las cuentas anteriores; las nuevas cuentas deben verificar y guardar un correo único.
+- Ejecuta una vez cada migración pendiente en la base existente: `database/migrations/20261018_add_email_and_recovery_verification.sql` y `database/migrations/20261018_add_tacho_status_fields.sql`. La primera habilita correo/verificación de cuenta; la segunda agrega `tipo` y `porcentaje` al estado del tacho.
 - Si se usa PostgreSQL con conexión por URL, `DATABASE_URL` puede reemplazar las variables locales; el backend usa esa URL cuando está definida.
 - El backend crea la conexión MQTT al iniciar y loguea `Suscrito a temas MQTT: ...` cuando la suscripción tiene éxito.
 - Para validar recepción real, publica un evento válido al tema `smartbin/status` o `smartbin/recycle` y revisa la base de datos o las respuestas de las rutas autenticadas.

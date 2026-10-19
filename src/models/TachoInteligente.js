@@ -7,6 +7,10 @@ const TachoInteligente = sequelize.define('TachoInteligente', {
 		primaryKey: true,
 		allowNull: false
 	},
+	tipo: {
+		type: DataTypes.STRING(32),
+		allowNull: true
+	},
 	latitud: {
 		type: DataTypes.FLOAT,
 		allowNull: false
@@ -18,6 +22,14 @@ const TachoInteligente = sequelize.define('TachoInteligente', {
 	capacidad: {
 		type: DataTypes.BOOLEAN,
 		allowNull: false
+	},
+	porcentaje: {
+		type: DataTypes.FLOAT,
+		allowNull: true,
+		validate: {
+			min: 0,
+			max: 100
+		}
 	},
 	estado: {
 		type: DataTypes.BOOLEAN,

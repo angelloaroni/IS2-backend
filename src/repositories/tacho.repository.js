@@ -33,7 +33,7 @@ class TachoRepository {
         }
 
         return TachoInteligente.findAll({
-            attributes: ['id_tacho', 'latitud', 'longitud', 'capacidad'],
+            attributes: ['id_tacho', 'tipo', 'latitud', 'longitud', 'capacidad', 'porcentaje'],
             where: { [Op.and]: condiciones },
             order: [['id_tacho', 'ASC']],
         });

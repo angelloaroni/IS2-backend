@@ -7,15 +7,36 @@ import tachoRepository from '../repositories/tacho.repository.js';
 import UsuarioRepository from '../repositories/usuario.repository.js';
 import { calcularPuntos, validarRegistroResiduo } from './puntos.service.js';
 
-function validarMensajeTacho(data) {
+export function validarMensajeTacho(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new AppError('El JSON del tacho no es válido', 400);
   }
 
-  const camposPermitidos = new Set(['idEvento', 'codUser', 'idTacho', 'tipo', 'peso']);
+  const camposPermitidos = new Set([
+    'evento',
+    'idEvento',
+    'codUser',
+    'idtacho',
+    'idTacho',
+    'tipo',
+    'peso',
+  ]);
   if (Object.keys(data).some((campo) => !camposPermitidos.has(campo))) {
     throw new AppError('El JSON del tacho contiene campos no permitidos', 400);
   }
+
+  if (data.evento !== undefined && data.idEvento !== undefined) {
+    throw new AppError('El mensaje debe incluir evento o idEvento, no ambos', 400);
+  }
+  if (data.idtacho !== undefined && data.idTacho !== undefined) {
+    throw new AppError('El mensaje debe incluir idtacho o idTacho, no ambos', 400);
+  }
+
+  const eventoEntrada = data.evento ?? data.idEvento;
+  const idTacho = data.idtacho ?? data.idTacho;
+  const idEvento = typeof eventoEntrada === 'string' || Number.isSafeInteger(eventoEntrada)
+    ? String(eventoEntrada).trim()
+    : '';
 
   if (
     typeof data.codUser !== 'string'
@@ -23,18 +44,14 @@ function validarMensajeTacho(data) {
   ) {
     throw new AppError('codUser debe contener exactamente 8 dígitos', 400);
   }
-  if (
-    typeof data.idEvento !== 'string'
-    || !data.idEvento.trim()
-    || data.idEvento.trim().length > 128
-  ) {
-    throw new AppError('idEvento es obligatorio y debe tener hasta 128 caracteres', 400);
+  if (!idEvento || idEvento.length > 128) {
+    throw new AppError('evento debe ser un identificador único de hasta 128 caracteres', 400);
   }
 
   return {
-    idEvento: data.idEvento.trim(),
+    idEvento,
     codUser: data.codUser,
-    idTacho: data.idTacho,
+    idTacho,
     tipo: data.tipo,
     peso: data.peso,
   };

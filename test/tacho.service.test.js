@@ -23,15 +23,55 @@ test('actualiza los datos de estado del tacho recibidos por MQTT', async () => {
 
         assert.deepEqual(estado, {
             idTacho: 7,
+            tipo: null,
             latitud: -12.0464,
             longitud: -77.0428,
             capacidad: false,
+            porcentaje: null,
         });
         assert.equal(idActualizado, 7);
         assert.deepEqual(cambiosAplicados, {
             latitud: -12.0464,
             longitud: -77.0428,
             capacidad: false,
+        });
+    } finally {
+        tachoRepository.actualizar = previousActualizar;
+    }
+});
+
+test('actualiza los seis campos del nuevo JSON de estado MQTT', async () => {
+    const previousActualizar = tachoRepository.actualizar;
+    let cambiosAplicados;
+    tachoRepository.actualizar = async (id, cambios) => {
+        cambiosAplicados = cambios;
+        return { id_tacho: id, ...cambios };
+    };
+
+    try {
+        const estado = await actualizarEstadoTacho({
+            id_tacho: 7,
+            tipo: 'plastico',
+            latitud: -12.0464,
+            longitud: -77.0428,
+            capacidad: true,
+            porcentaje: 100,
+        });
+
+        assert.deepEqual(cambiosAplicados, {
+            tipo: 'plastico',
+            latitud: -12.0464,
+            longitud: -77.0428,
+            capacidad: true,
+            porcentaje: 100,
+        });
+        assert.deepEqual(estado, {
+            idTacho: 7,
+            tipo: 'plastico',
+            latitud: -12.0464,
+            longitud: -77.0428,
+            capacidad: true,
+            porcentaje: 100,
         });
     } finally {
         tachoRepository.actualizar = previousActualizar;
@@ -49,6 +89,17 @@ test('rechaza estados de tacho inválidos sin actualizar la base de datos', asyn
                 latitud: -12.0464,
                 longitud: -77.0428,
                 capacidad: 'lleno',
+            }),
+            { statusCode: 400 }
+        );
+        await assert.rejects(
+            actualizarEstadoTacho({
+                id_tacho: 7,
+                tipo: 'plastico',
+                latitud: -12.0464,
+                longitud: -77.0428,
+                capacidad: true,
+                porcentaje: 101,
             }),
             { statusCode: 400 }
         );
