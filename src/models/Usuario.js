@@ -33,6 +33,10 @@ const Usuario = sequelize.define('Usuario', {
 		allowNull: false,
 		field: 'contrasena'
 	},
+	correo_institucional: {
+		type: DataTypes.STRING(254),
+		allowNull: true
+	},
 	estado: {
 		type: DataTypes.BOOLEAN,
 		allowNull: false

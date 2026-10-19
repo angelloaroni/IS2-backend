@@ -1,6 +1,6 @@
-# Guía de uso de la API — Tachín Verde
+﻿# Guía de uso de la API — Tachín Verde
 
-Referencia para consumir las APIs HTTP del backend. Se centra en **qué datos recibe cada endpoint y qué datos devuelve**.
+Referencia para consumir las APIs HTTP del backend y los mensajes MQTT que procesan los tachos inteligentes. El documento refleja el estado actual del código del repositorio y debe usarse como guía operativa para probar, integrar y mantener la API.
 
 ## Convenciones
 
@@ -26,13 +26,20 @@ Las respuestas exitosas tienen esta envoltura:
 }
 ```
 
-En la tabla de cada endpoint, los campos indicados como **recibe** describen lo que se envía en el body, query string, ruta o header. **Devuelve** describe el objeto dentro de `data`.
+En la tabla de cada endpoint, los campos indicados como `recibe` describen el body, query string, ruta o header. `devuelve` describe el objeto dentro de `data`.
 
-En las rutas protegidas, primero inicia sesión y envía el JWT de la respuesta en el header:
+En las rutas protegidas, primero inicia sesión y envía el JWT de la respuesta en el encabezado:
 
 ```http
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
+
+### Roles y permisos
+
+- Rutas públicas: solicitud y verificación de códigos, `POST /auth/registro`, `POST /auth/recuperar-contrasena`, `POST /auth/modificar-contrasena` y `POST /auth/login`.
+- Rutas para usuarios autenticados: perfil, historial, métricas, residuos, ranking, logros, premios y notificaciones personales.
+- Rutas administrativas: creación, edición y baja de tachos, creación de premios y logros, envío de notificaciones del sistema y baja de usuarios.
+- El header `x-cod-user` no autentica ninguna ruta; la identidad real se valida desde el JWT y la base de datos.
 
 Configura `JWT_SECRET` en el entorno del servidor con al menos 32 bytes aleatorios. Las contraseñas se guardan con hash bcrypt; las contraseñas antiguas en texto plano se convierten a hash al iniciar sesión correctamente.
 
@@ -40,42 +47,98 @@ El registro público solo permite crear cuentas de tipo `usuario`. Las cuentas `
 
 ## 1. Registro e inicio de sesión
 
-### 1.1 Registrar usuario
+### 1.1 Verificar correo y registrar usuario
+
+Antes de registrar la cuenta, solicita un código de verificación:
 
 ```http
-POST /auth/registro
+POST /auth/registro/codigo
 ```
 
 **Recibe** en el body:
 
 ```json
 {
-  "cod_user": "00001004",
-  "nombre": "Ana Pérez",
-  "tipo": "usuario",
-  "contraseña": "mi-clave"
+  "correo_institucional": "ana@institucion.edu"
 }
 ```
 
-| Campo | Tipo | Requisito |
-|---|---|---|
-| `cod_user` | string | Obligatorio, ocho dígitos y único. |
-| `nombre` | string | Obligatorio, no vacío. |
-| `tipo` | string | Obligatorio; debe ser `usuario`. |
-| `contraseña` | string | Obligatoria, no vacía y máximo 72 bytes en UTF-8. |
+El sistema envía un código aleatorio de 8 dígitos al correo. El código expira en 3 minutos y admite hasta 5 intentos. Para volver a solicitarlo hay que esperar 1 minuto.
 
-**Devuelve** HTTP 201: el objeto de usuario creado, sin el campo de contraseña. El servidor inicializa `puntos` en 0 y `estado` en `true`. El identificador se asigna al guardar.
-
-Ejemplo de `data`:
+**Devuelve** HTTP 200:
 
 ```json
 {
-  "id_user": 4,
+  "ok": true,
+  "data": {
+    "mensaje": "Se envió un código de verificación al correo institucional."
+  },
+  "error": null
+}
+```
+
+Verifica el código recibido:
+
+```http
+POST /auth/verificar-codigo
+```
+
+```json
+{
+  "correo_institucional": "ana@institucion.edu",
+  "codigo_verificacion": "01234567",
+  "proposito": "registro"
+}
+```
+
+`proposito` debe ser `registro`. Si el código es correcto, devuelve un token de seguridad de un solo uso, válido por 10 minutos:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "mensaje": "Código verificado correctamente",
+    "token_seguridad": "<token-de-un-solo-uso>",
+    "expira_en_segundos": 600
+  },
+  "error": null
+}
+```
+
+Completa el registro usando el token obtenido:
+
+```http
+POST /auth/registro
+```
+
+```json
+{
   "cod_user": "00001004",
   "nombre": "Ana Pérez",
-  "puntos": 0,
   "tipo": "usuario",
-  "estado": true
+  "contraseña": "mi-clave",
+  "correo_institucional": "ana@institucion.edu",
+  "token_seguridad": "<token-de-un-solo-uso>"
+}
+```
+
+`cod_user` debe tener ocho dígitos y ser único; `nombre` no puede estar vacío; `tipo` debe ser `usuario`; la contraseña es obligatoria y de hasta 72 bytes UTF-8. El correo debe ser el mismo que se verificó. El token se consume al crear la cuenta. El servidor inicializa `puntos` en `0` y `estado` en `true`, y nunca devuelve la contraseña.
+
+**Devuelve** HTTP 201 con el usuario creado, incluido el correo institucional y sin la contraseña:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "id_user": 4,
+    "cod_user": "00001004",
+    "nombre": "Ana Pérez",
+    "puntos": 0,
+    "tipo": "usuario",
+    "correo_institucional": "ana@institucion.edu",
+    "estado": true
+  },
+  "error": null
 }
 ```
 
@@ -106,11 +169,70 @@ Ejemplo de `data`:
     "nombre": "Carlos Pérez",
     "puntos": 150.5,
     "tipo": "usuario",
+    "correo_institucional": "carlos@institucion.edu",
     "estado": true
   },
   "token": "<jwt-firmado>"
 }
 ```
+
+### 1.3 Recuperar la cuenta y cambiar la contraseña
+
+Solicita el código de recuperación con el correo institucional:
+
+```http
+POST /auth/recuperar-contrasena
+```
+
+```json
+{
+  "correo_institucional": "ana@institucion.edu"
+}
+```
+
+La respuesta no revela si existe una cuenta asociada al correo. Si corresponde a una cuenta activa, se envía un código de 8 dígitos, válido por 3 minutos y con un máximo de 5 intentos.
+
+**Devuelve** HTTP 200 con el mismo mensaje para una cuenta existente o inexistente:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "mensaje": "Si el correo está asociado a una cuenta, recibirás un código de verificación."
+  },
+  "error": null
+}
+```
+
+Verifica el código con propósito `recuperacion`:
+
+```http
+POST /auth/verificar-codigo
+```
+
+```json
+{
+  "correo_institucional": "ana@institucion.edu",
+  "codigo_verificacion": "01234567",
+  "proposito": "recuperacion"
+}
+```
+
+Con el token de seguridad devuelto, solicita el cambio:
+
+```http
+POST /auth/modificar-contrasena
+```
+
+```json
+{
+  "cod_user": "00001004",
+  "nueva_contraseña": "nueva-clave-segura",
+  "token_seguridad": "<token-de-un-solo-uso>"
+}
+```
+
+El backend comprueba que el token no esté vencido ni usado y que el usuario indicado por `cod_user` sea el dueño del correo que recibió el código. El token se invalida al cambiar la contraseña. La nueva contraseña se almacena con bcrypt y acepta hasta 72 bytes UTF-8.
 
 ## 2. Residuos y reciclaje
 
@@ -120,7 +242,7 @@ Endpoint recomendado:
 
 ```http
 POST /residuos
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe** en el body:
@@ -178,17 +300,21 @@ Para nuevas integraciones, utiliza `POST /residuos`.
 
 ## 3. Recepción de datos enviados por un tacho
 
-El servidor se suscribe al broker Mosquitto al iniciar. Configura el broker y los temas en el entorno:
+El backend se suscribe al broker Mosquitto al iniciar. La conexión y los temas se configuran en variables de entorno y pueden sobrescribirse por entorno; el cliente MQTT usa QoS 1.
 
 ```dotenv
-MQTT_BROKER_URL=mqtt://192.168.18.143:1883
+MQTT_BROKER_URL=mqtt://192.168.0.105:1883
 MQTT_TOPIC_TACHO_ESTADO=smartbin/status
 MQTT_TOPIC_EVENTO_RECICLAJE=smartbin/recycle
 MQTT_USERNAME=
 MQTT_PASSWORD=
 ```
 
-El usuario y la contraseña son opcionales, pero deben configurarse juntos. El tema `smartbin/status` recibe:
+La URL del broker debe indicar el host y puerto del broker real. El usuario y la contraseña son opcionales, pero deben configurarse juntos. El backend valida que `MQTT_USERNAME` y `MQTT_PASSWORD` no queden mezclados: si uno está definido, el otro también debe estarlo. Los temas de estado y reciclaje no pueden ser iguales.
+
+### 3.1 Tema `smartbin/status`
+
+El dispositivo publica el estado y la ubicación del tacho:
 
 ```json
 {
@@ -199,9 +325,13 @@ El usuario y la contraseña son opcionales, pero deben configurarse juntos. El t
 }
 ```
 
-El tacho debe existir y estar activo. El backend persiste `latitud`, `longitud` y `capacidad` en la tabla `TachoInteligente`. `capacidad` es un booleano; `true` indica que alcanzó su capacidad. Este mensaje no cambia el estado administrativo del tacho.
+El backend valida que el JSON contenga exactamente esos campos, que `idTacho` sea positivo, que las coordenadas estén dentro de su rango válido y que `capacidad` sea booleano. Si el tacho existe y está activo, actualiza `latitud`, `longitud` y `capacidad` en la tabla `TachoInteligente`.
 
-El tema `smartbin/recycle` recibe:
+`capacidad` es un booleano; `true` indica que alcanzó su capacidad. Este mensaje no cambia el estado administrativo del tacho (`estado`) ni el `id_tacho`.
+
+### 3.2 Tema `smartbin/recycle`
+
+El dispositivo publica un evento de reciclaje:
 
 ```json
 {
@@ -213,17 +343,21 @@ El tema `smartbin/recycle` recibe:
 }
 ```
 
-`idEvento` funciona como clave de idempotencia. El backend valida y procesa el evento con las mismas reglas que el registro autenticado: resuelve el usuario por `codUser`, verifica usuario y tacho activos, y calcula puntos y fecha. MQTT QoS 1 permite la entrega al menos una vez; un evento repetido no vuelve a sumar puntos. La antigua ruta HTTP `POST /tachos/recepcion` ya no está disponible.
+`idEvento` funciona como clave de idempotencia. El backend valida el JSON, resuelve el usuario por `codUser`, verifica que usuario y tacho estén activos, calcula puntos y registra el residuo en la misma transacción.
+
+Si el mismo evento llega más de una vez (por ejemplo por QoS 1), la clave `idEvento` ya existente evita volver a insertar el residuo ni sumar puntos. La ruta HTTP antigua `POST /api/tachos/recepcion` ya no está disponible; el flujo MQTT reemplaza ese mecanismo.
 
 ## 4. Tachos
 
 Las respuestas serializadas de tacho contienen `idTacho`, `latitud`, `longitud` y `capacidad`.
 
+Los usuarios autenticados pueden consultar el listado, buscar por id y buscar cercanos. La creación, edición y baja de tachos requieren rol `admin`.
+
 ### 4.1 Listar tachos activos
 
 ```http
 GET /tachos
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -249,7 +383,7 @@ Authorization: Bearer <token>
 
 ```http
 GET /tachos/1
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** `id` como entero positivo en la ruta.
@@ -260,7 +394,7 @@ Authorization: Bearer <token>
 
 ```http
 GET /tachos/cercanos?lat=-12.0464&lng=-77.0428&radio=5000
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe** estos parámetros en query:
@@ -293,7 +427,7 @@ Authorization: Bearer <token>
 
 ```http
 POST /tachos
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe** en el body:
@@ -314,7 +448,7 @@ Latitud debe estar entre -90 y 90, longitud entre -180 y 180, y `capacidad` debe
 
 ```http
 PUT /tachos/1
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe** en el body uno o varios de estos campos:
@@ -335,7 +469,7 @@ Todos son opcionales individualmente, pero se debe enviar al menos uno. No se ad
 
 ```http
 DELETE /tachos/1
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** `id` como entero positivo en la ruta. No requiere body.
@@ -358,7 +492,7 @@ Authorization: Bearer <token>
 
 ```http
 GET /usuarios
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -369,7 +503,7 @@ Authorization: Bearer <token>
 
 ```http
 GET /usuarios/me/historial?pagina=1&limite=10
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe** estos parámetros opcionales:
@@ -411,7 +545,7 @@ Authorization: Bearer <token>
 
 ```http
 GET /usuarios/me/metricas
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -457,7 +591,7 @@ Los períodos se agrupan por mes en formato `YYYY-MM`.
 
 ```http
 DELETE /usuarios/2
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** `id` como id positivo del usuario en la ruta. No requiere body.
@@ -470,7 +604,7 @@ Authorization: Bearer <token>
 
 ```http
 GET /premios
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -481,7 +615,7 @@ Authorization: Bearer <token>
 
 ```http
 POST /premios
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe** en el body:
@@ -503,7 +637,7 @@ Authorization: Bearer <token>
 
 ```http
 POST /premios/1/canjear
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** el id del premio en la ruta. No requiere body.
@@ -538,7 +672,7 @@ Authorization: Bearer <token>
 
 ```http
 GET /logros
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -549,7 +683,7 @@ Authorization: Bearer <token>
 
 ```http
 POST /logros
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe** en el body:
@@ -571,7 +705,7 @@ Authorization: Bearer <token>
 
 ```http
 GET /ranking
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -610,7 +744,7 @@ El top contiene hasta diez usuarios. Cada usuario del ranking contiene `id_user`
 
 ```http
 GET /notificaciones
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe:** no requiere body ni parámetros.
@@ -633,7 +767,7 @@ Authorization: Bearer <token>
 
 ```http
 POST /notificaciones/sistema
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
 **Recibe** en el body:
@@ -671,4 +805,31 @@ Códigos usados por la API:
 | `403` | La operación requiere un rol diferente. |
 | `404` | No existe el usuario, tacho, premio o recurso solicitado. |
 | `409` | El recurso ya existe, se repitió la clave de idempotencia o no hay stock. |
+| `429` | Se solicitó otro código antes de que transcurriera el intervalo de reenvío. |
+| `502` / `503` | Falló el envío del correo o SMTP no está configurado. |
 | `500` | Error interno al procesar la solicitud. |
+
+## 11. Configuración y comprobación rápida
+
+- En local, crea un archivo `.env` a partir de `.env.example` y completa `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `JWT_SECRET` y `VERIFICATION_SECRET`. Ambos secretos deben tener al menos 32 bytes aleatorios.
+- Genera cada secreto de forma independiente, por ejemplo con `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64'))"`; no reutilices ni publiques los valores.
+- Para Google Workspace o Gmail, configura el transporte SMTP así:
+
+  ```dotenv
+  SMTP_HOST=smtp.gmail.com
+  SMTP_PORT=587
+  SMTP_SECURE=false
+  SMTP_USER=cuenta-institucional@institucion.edu
+  SMTP_PASSWORD=contraseña_de_aplicacion_de_google
+  SMTP_FROM=cuenta-institucional@institucion.edu
+  ```
+
+  `SMTP_USER` debe ser la dirección completa de la cuenta Google que autentica el envío, sin espacios ni texto adicional. `SMTP_FROM` debe ser esa dirección autorizada. `SMTP_PASSWORD` debe ser una contraseña de aplicación de Google, no la contraseña habitual; si Google la muestra agrupada, introdúcela sin espacios. No incluyas comillas en los valores ni publiques el contenido de `.env`.
+- Para generar una contraseña de aplicación, inicia sesión con la cuenta que se usará como remitente, activa la verificación en dos pasos y crea una contraseña con un nombre reconocible, por ejemplo `Tachín Verde Backend`. Algunas cuentas institucionales tienen esta función bloqueada por políticas de Google Workspace; en ese caso, solicita al administrador de la institución el método de envío aprobado. Consulta la [ayuda oficial de Google sobre contraseñas de aplicación](https://support.google.com/accounts/answer/185833?hl=es).
+- Si aparece `535-5.7.8 Username and Password not accepted`, comprueba que `SMTP_USER` sea el correo completo correcto, que la contraseña de aplicación se haya copiado sin espacios y que corresponda a esa misma cuenta. Verifica también que Google Workspace permita contraseñas de aplicación. Si la credencial se compartió o expuso, revócala en la cuenta Google y genera otra. `SMTP_USER` y `SMTP_PASSWORD` deben configurarse juntos; los códigos no se enviarán si falta SMTP o falla la autenticación.
+- Después de cambiar el `.env`, reinicia el backend. El envío de los códigos de verificación requiere SMTP funcional.
+- Ejecuta una vez `database/migrations/20261018_add_email_and_recovery_verification.sql` en la base existente. La columna de correo permite `NULL` para conservar las cuentas anteriores; las nuevas cuentas deben verificar y guardar un correo único.
+- Si se usa PostgreSQL con conexión por URL, `DATABASE_URL` puede reemplazar las variables locales; el backend usa esa URL cuando está definida.
+- El backend crea la conexión MQTT al iniciar y loguea `Suscrito a temas MQTT: ...` cuando la suscripción tiene éxito.
+- Para validar recepción real, publica un evento válido al tema `smartbin/status` o `smartbin/recycle` y revisa la base de datos o las respuestas de las rutas autenticadas.
+- La API no tiene clientes de UI integrados en este repositorio; la integración debe hacerse con herramientas HTTP o un broker MQTT externo.

@@ -1,7 +1,14 @@
+import sequelize from '../config/db.js';
 import UsuarioRepository from '../repositories/usuario.repository.js';
 import AppError from '../utils/AppError.js';
 import { createAccessToken } from '../utils/jwt.js';
-import { hashPassword, isPasswordHash, MAX_PASSWORD_BYTES, verifyPassword } from '../utils/password.js';
+import {
+    hashPassword,
+    isPasswordHash,
+    MAX_PASSWORD_BYTES,
+    verifyPassword,
+} from '../utils/password.js';
+import { buscarTokenSeguridad, normalizarCorreoInstitucional } from './verificacion.service.js';
 
 const usuarioRepository = new UsuarioRepository();
 
@@ -31,6 +38,7 @@ export async function registrarUsuario(data = {}) {
     const nombre = String(data?.nombre ?? '').trim();
     const tipo = String(data?.tipo ?? '').trim().toLowerCase();
     const contraseña = typeof data?.contraseña === 'string' ? data.contraseña : '';
+    const correo_institucional = normalizarCorreoInstitucional(data?.correo_institucional);
 
     if (!nombre) {
         throw new AppError('El nombre es obligatorio', 400);
@@ -52,19 +60,45 @@ export async function registrarUsuario(data = {}) {
         throw new AppError(`La contraseña no puede superar ${MAX_PASSWORD_BYTES} bytes`, 400);
     }
 
-    const usuarioExistente = await usuarioRepository.buscarPorCodigo(cod_user);
-    if (usuarioExistente) {
-        throw new AppError('Ya existe un usuario con ese cod_user', 409);
-    }
+    let usuarioCreado;
+    try {
+        usuarioCreado = await sequelize.transaction(async transaction => {
+            const verificacion = await buscarTokenSeguridad(data?.token_seguridad, 'registro', {
+                transaction,
+            });
+            if (verificacion.correo_institucional !== correo_institucional) {
+                throw new AppError('El token de seguridad no corresponde al correo verificado', 403);
+            }
 
-    const usuarioCreado = await usuarioRepository.crearUsuario({
-        cod_user,
-        nombre,
-        puntos: 0,
-        tipo,
-        contraseña: await hashPassword(contraseña),
-        estado: true,
-    });
+            if (await usuarioRepository.buscarPorCodigo(cod_user, { transaction })) {
+                throw new AppError('Ya existe un usuario con ese cod_user', 409);
+            }
+            if (await usuarioRepository.buscarPorCorreo(correo_institucional, { transaction })) {
+                throw new AppError('Ya existe una cuenta con ese correo institucional', 409);
+            }
+
+            const contraseñaHash = await hashPassword(contraseña);
+            const nuevoUsuario = await usuarioRepository.crearUsuario(
+                {
+                    cod_user,
+                    nombre,
+                    puntos: 0,
+                    tipo,
+                    contraseña: contraseñaHash,
+                    correo_institucional,
+                    estado: true,
+                },
+                { transaction }
+            );
+            await verificacion.update({ utilizado_en: new Date() }, { transaction });
+            return nuevoUsuario;
+        });
+    } catch (error) {
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            throw new AppError('Ya existe un usuario con ese código o correo institucional', 409);
+        }
+        throw error;
+    }
 
     return sanitizarUsuario(usuarioCreado);
 }

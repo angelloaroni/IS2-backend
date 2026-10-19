@@ -5,14 +5,22 @@ import AppError from '../utils/AppError.js';
 class UsuarioRepository extends RepositoryBase {
     constructor() { super(Usuario); }
 
-    async buscarPorCodigo(codUser) {
+    async buscarPorCodigo(codUser, { transaction = null } = {}) {
         return this.model.findOne({
-            where: { cod_user: String(codUser) }
+            where: { cod_user: String(codUser) },
+            transaction,
         });
     }
 
-    async crearUsuario(data) {
-        return this.model.create(data);
+    async buscarPorCorreo(correoInstitucional, { transaction = null } = {}) {
+        return this.model.findOne({
+            where: { correo_institucional: correoInstitucional },
+            transaction,
+        });
+    }
+
+    async crearUsuario(data, { transaction = null } = {}) {
+        return this.model.create(data, { transaction });
     }
 
     async buscarPorId(id, { transaction = null } = {}) {
