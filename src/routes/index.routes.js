@@ -10,10 +10,13 @@ import tachoRoutes from './tacho.routes.js';
 import rankingRoutes from './ranking.routes.js';
 import logrosRoutes from './logro.routes.js';
 import notificacionRoutes from './notificacion.routes.js';
+import dashboardRoutes from './dashboard.routes.js';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
+// Montaje mínimo de A autorizado por el usuario; permisos en el router.
+router.use('/dashboard', dashboardRoutes);
 
 router.use('/usuarios', authMiddleware, authorizeRoles(['admin', 'usuario']), usuarioRoutes);
 router.use('/residuos', authMiddleware, authorizeRoles(['admin', 'usuario']), residuosRoutes);

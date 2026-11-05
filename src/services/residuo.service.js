@@ -6,6 +6,8 @@ import residuoRepository from '../repositories/residuo.repository.js';
 import tachoRepository from '../repositories/tacho.repository.js';
 import UsuarioRepository from '../repositories/usuario.repository.js';
 import { calcularPuntos, validarRegistroResiduo } from './puntos.service.js';
+import { fechaDiaLima } from '../utils/filtrosActividad.js';
+import eventoPendienteRepository from '../repositories/eventoPendiente.repository.js';
 
 export function validarMensajeTacho(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -101,6 +103,7 @@ export async function registrarResiduo(data) {
     const puntosGanados = calcularPuntos(peso, tipo);
     const residuo = await residuoRepository.crear({
       peso,
+      puntos_ganados: puntosGanados,
       tipo,
       idempotency_key: idempotencyKey,
       id_user: idUser,
@@ -108,7 +111,8 @@ export async function registrarResiduo(data) {
     }, { transaction });
 
     await historialRepository.crear({
-      fecha,
+      fecha: fechaDiaLima(fecha),
+      fecha_instante: fecha,
       id_user: idUser,
       id_tacho: idTacho,
       id_residuo: residuo.id_residuo,
@@ -116,17 +120,13 @@ export async function registrarResiduo(data) {
 
     await usuarioRepository.sumarPuntos(idUser, puntosGanados, { transaction });
 
+    const evento = { idUser, idResiduo: residuo.id_residuo, idTacho, tipo, peso, puntosGanados, fecha };
+    await eventoPendienteRepository.registrarReciclaje(evento, { transaction });
+
     await transaction.commit();
 
-    eventos.emit(EVENTOS.RESIDUO_REGISTRADO, {
-      idUser,
-      idResiduo: residuo.id_residuo,
-      idTacho,
-      tipo,
-      peso,
-      puntosGanados,
-      fecha,
-    });
+    // Los listeners R1 se conservan hasta la conexión coordinada de Fase 2.
+    eventos.emit(EVENTOS.RESIDUO_REGISTRADO, evento);
 
     return {
       idResiduo: residuo.id_residuo,

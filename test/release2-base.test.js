@@ -12,6 +12,7 @@ import historialRepository from '../src/repositories/historial.repository.js';
 import residuoRepository from '../src/repositories/residuo.repository.js';
 import tachoRepository from '../src/repositories/tacho.repository.js';
 import UsuarioRepository from '../src/repositories/usuario.repository.js';
+import eventoPendienteRepository from '../src/repositories/eventoPendiente.repository.js';
 
 test('el consumidor usa las dos firmas de página 8 sin proveedor real de A', async () => {
     const fixture = crearFixturesRelease2();
@@ -139,6 +140,7 @@ test('R1 conserva el payload publicado y lo emite solo después del commit; dupl
     reemplazar(tachoRepository, 'buscarActivoPorId', async () => fixture.tachos[0]);
     reemplazar(UsuarioRepository.prototype, 'buscarPorId', async () => fixture.usuarios[0]);
     reemplazar(UsuarioRepository.prototype, 'sumarPuntos', async () => { pasos.push('saldo'); });
+    reemplazar(eventoPendienteRepository, 'registrarReciclaje', async () => { pasos.push('evento-pendiente'); });
     const listener = (payload) => {
         assert.equal(pasos.at(-1), 'commit');
         emitidos.push(payload);
@@ -148,7 +150,7 @@ test('R1 conserva el payload publicado y lo emite solo después del commit; dupl
 
     const entrada = { idUser: 1, idTacho: 3, tipo: 'plastico', peso: 0.25, idempotencyKey: 'fase0-evento-42' };
     await registrarResiduo(entrada);
-    assert.deepEqual(pasos, ['historial', 'saldo', 'commit']);
+    assert.deepEqual(pasos, ['historial', 'saldo', 'evento-pendiente', 'commit']);
     assert.equal(emitidos.length, 1);
     assert.ok(emitidos[0].fecha instanceof Date);
     assert.deepEqual({ ...emitidos[0], fecha: esperado.fecha }, esperado);

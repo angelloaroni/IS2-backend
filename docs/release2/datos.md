@@ -117,3 +117,10 @@ copias independientes; no hay credenciales ni inserción automática en BD.
 enero/febrero y cuenta inexistente. `crearDobleEstadisticas(escenarios)` permite
 programar otros casos. Ninguno implementa agregaciones, ranking o recuperación.
 `database/seed.sql` permanece intacto y no se ejecuta para estos escenarios.
+
+## Implementación posterior en Fase 1
+
+La base común anterior describe el contrato aprobado en Fase 0. En
+`Sprint2/Fase1` A implementó el proveedor real, migraciones y las APIs autorizadas:
+ver [fase1-a.md](fase1-a.md) para cambios físicos aprobados, aplicación, evidencias
+con PostgreSQL/MQTT y la frontera de integración recuperable pendiente con B.

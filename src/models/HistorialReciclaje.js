@@ -11,6 +11,10 @@ const HistorialReciclaje = sequelize.define('HistorialReciclaje', {
         type: DataTypes.DATEONLY,
         allowNull: false
     },
+    fecha_instante: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
     id_user:{
         type: DataTypes.INTEGER,
         allowNull: false,

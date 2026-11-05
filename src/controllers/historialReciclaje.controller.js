@@ -12,7 +12,7 @@ export async function obtenerHistorialController(req, res, next) {
 
 export async function obtenerMetricasController(req, res, next) {
     try {
-        return exito(res, await obtenerMetricas(req.usuario.id_user));
+        return exito(res, await obtenerMetricas(req.usuario.id_user, req.query));
     } catch (error) {
         return next(error);
     }
