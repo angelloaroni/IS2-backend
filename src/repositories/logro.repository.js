@@ -1,8 +1,9 @@
 import { Op } from 'sequelize';
+import sequelize from '../config/db.js';
 import Logro from '../models/Logro.js';
 import LogrosUsuario from '../models/LogrosUsuario.js';
-import Residuo from '../models/Residuo.js';
-import Usuario from '../models/Usuario.js';
+import { obtenerEstadisticasUsuario } from '../services/estadisticas.service.js';
+import eventoRepository from './evento.repository.js';
 
 class LogroRepository {
     async crear(data) {
@@ -33,21 +34,7 @@ class LogroRepository {
     }
 
     async obtenerEstadisticasUsuario(idUser) {
-        const [cantidadResiduos, pesoTotal, usuario] = await Promise.all([
-            Residuo.count({ where: { id_user: idUser } }),
-            Residuo.sum('peso', { where: { id_user: idUser } }),
-            Usuario.findByPk(idUser, { attributes: ['puntos'] }),
-        ]);
-
-        if (!usuario) {
-            throw new Error(`No se encontró el usuario ${idUser} al evaluar sus logros`);
-        }
-
-        return {
-            cantidad_residuos: Number(cantidadResiduos),
-            puntos_acumulados: Number(usuario.puntos),
-            peso_total_kg: Number(pesoTotal ?? 0),
-        };
+        return obtenerEstadisticasUsuario(idUser);
     }
 
     async listarIdsOtorgados(idUser) {
@@ -59,12 +46,39 @@ class LogroRepository {
         return new Set(otorgados.map(({ id_logro }) => Number(id_logro)));
     }
 
-    async otorgar(idUser, idLogro, fecha) {
-        return LogrosUsuario.create({
-            id_user: idUser,
-            id_logro: idLogro,
-            fecha_obtencion: fecha,
+    async otorgarUnaVez(idUser, idLogro, fecha, { transaction = null } = {}) {
+        const otorgarEnTransaccion = async (tx) => {
+            const resultado = await LogrosUsuario.findOrCreate({
+                where: { id_user: idUser, id_logro: idLogro },
+                defaults: { fecha_obtencion: fecha },
+                transaction: tx,
+            });
+            if (resultado[1]) {
+                await eventoRepository.registrar({
+                    tipo: 'logro.otorgado',
+                    referencia: `logro:${idUser}:${idLogro}`,
+                    payload: {
+                        idUser,
+                        idLogro,
+                        nombre: await this.nombrePorId(idLogro, tx),
+                    },
+                }, { transaction: tx });
+            }
+            return resultado;
+        };
+
+        return transaction
+            ? otorgarEnTransaccion(transaction)
+            : sequelize.transaction(otorgarEnTransaccion);
+    }
+
+    async nombrePorId(idLogro, transaction) {
+        const logro = await Logro.findByPk(idLogro, {
+            attributes: ['nombre'],
+            transaction,
         });
+        if (!logro) throw new Error(`No se encontró el logro ${idLogro}`);
+        return logro.nombre;
     }
 }
 

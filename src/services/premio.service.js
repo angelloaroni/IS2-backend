@@ -3,7 +3,9 @@ import AppError from '../utils/AppError.js';
 import Premio from '../models/Premio.js';
 import UsuarioPremio from '../models/UsuarioPremio.js';
 import PremioRepository from '../repositories/premio.repository.js';
+import eventoRepository from '../repositories/evento.repository.js';
 import eventos, { EVENTOS } from '../utils/eventos.js';
+import { fechaActualLima } from '../utils/periodo.js';
 
 const premioRepository = new PremioRepository();
 
@@ -13,10 +15,22 @@ export async function obtenerPremios() {
 }
 
 export async function agregarPremio(data = {}) {
-    const nombre = String(data.nombre ?? '').trim();
-    const descripcion = String(data.descripcion ?? '').trim();
-    const costo = Number(data.costo);
-    const stock = Number(data.stock);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new AppError('Los datos del premio no son válidos', 400);
+    }
+    const camposDesconocidos = Object.keys(data)
+        .filter((campo) => !['nombre', 'descripcion', 'costo', 'stock'].includes(campo));
+    if (camposDesconocidos.length > 0) {
+        throw new AppError(`Campos no permitidos: ${camposDesconocidos.join(', ')}`, 400);
+    }
+    const nombre = typeof data.nombre === 'string' ? data.nombre.trim() : '';
+    const descripcion = typeof data.descripcion === 'string' ? data.descripcion.trim() : '';
+    const costo = typeof data.costo === 'boolean' || data.costo === null || data.costo === ''
+        ? Number.NaN
+        : Number(data.costo);
+    const stock = typeof data.stock === 'boolean' || data.stock === null || data.stock === ''
+        ? Number.NaN
+        : Number(data.stock);
 
     if (!nombre) throw new AppError('El nombre del premio es obligatorio', 400);
     if (!descripcion) throw new AppError('La descripción del premio es obligatoria', 400);
@@ -27,8 +41,7 @@ export async function agregarPremio(data = {}) {
         throw new AppError('El stock debe ser un entero mayor o igual a cero', 400);
     }
 
-    const transaction = await sequelize.transaction();
-    try {
+    const premioJSON = await sequelize.transaction(async (transaction) => {
         const idPremio = await premioRepository.siguienteId(
             Premio,
             'id_premio',
@@ -42,12 +55,21 @@ export async function agregarPremio(data = {}) {
             costo,
             stock,
         }, { transaction });
-        await transaction.commit();
+        await eventoRepository.registrar({
+            tipo: 'premio.creado',
+            referencia: `premio:${premio.id_premio}`,
+            payload: {
+                idPremio: premio.id_premio,
+                nombre: premio.nombre,
+            },
+        }, { transaction });
         return premio.toJSON();
-    } catch (error) {
-        await transaction.rollback();
-        throw error;
-    }
+    });
+    eventos.emit(EVENTOS.PREMIO_CREADO, {
+        idPremio: premioJSON.id_premio,
+        nombre: premioJSON.nombre,
+    });
+    return premioJSON;
 }
 
 export async function canjearPremio(idUser, idPremio) {
@@ -56,8 +78,7 @@ export async function canjearPremio(idUser, idPremio) {
         throw new AppError('El id del premio debe ser un entero positivo', 400);
     }
 
-    const transaction = await sequelize.transaction();
-    try {
+    const resultado = await sequelize.transaction(async (transaction) => {
         const idCanje = await premioRepository.siguienteId(
             UsuarioPremio,
             'id_usuario_premio',
@@ -82,33 +103,45 @@ export async function canjearPremio(idUser, idPremio) {
         });
         await premio.decrement('stock', { by: 1, transaction });
 
-        const fechaObtencion = new Date().toISOString().slice(0, 10);
+        const fechaObtencion = fechaActualLima();
         const canje = await premioRepository.crearCanje({
             id_usuario_premio: idCanje,
             fecha_obtencion: fechaObtencion,
             id_premio: premio.id_premio,
             id_user: usuario.id_user,
         }, transaction);
+        await eventoRepository.registrar({
+            tipo: 'premio.canjeado',
+            referencia: `canje:${idCanje}`,
+            payload: {
+                idUser: usuario.id_user,
+                idPremio: premio.id_premio,
+                idCanje,
+                nombrePremio: premio.nombre,
+            },
+        }, { transaction });
 
-        await transaction.commit();
+        await Promise.all([
+            usuario.reload({ transaction }),
+            premio.reload({ transaction }),
+        ]);
         const resultado = {
             canje: canje.toJSON(),
             premio: {
                 id_premio: premio.id_premio,
                 nombre: premio.nombre,
                 costo: Number(premio.costo),
-                stock: Number(premio.stock) - 1,
+                stock: Number(premio.stock),
             },
-            puntos_restantes: Number(usuario.puntos) - Number(premio.costo),
+            puntos_restantes: Number(usuario.puntos),
         };
-        eventos.emit(EVENTOS.PREMIO_CANJEADO, {
-            idUser: usuario.id_user,
-            idPremio: premio.id_premio,
-            nombrePremio: premio.nombre,
-        });
         return resultado;
-    } catch (error) {
-        await transaction.rollback();
-        throw error;
-    }
+    });
+    eventos.emit(EVENTOS.PREMIO_CANJEADO, {
+        idUser: resultado.canje.id_user,
+        idPremio: resultado.canje.id_premio,
+        idCanje: resultado.canje.id_usuario_premio,
+        nombrePremio: resultado.premio.nombre,
+    });
+    return resultado;
 }

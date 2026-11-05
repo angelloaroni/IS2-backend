@@ -1,3 +1,3 @@
-import '../services/logro.service.js'
-import '../services/ranking.service.js'
-import '../services/notificacion.service.js'
+import { iniciarProcesadorEventos } from '../services/evento-consumidor.service.js';
+
+iniciarProcesadorEventos();

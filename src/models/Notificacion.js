@@ -38,6 +38,11 @@ const Notificacion = sequelize.define('Notificacion', {
         allowNull: false,
         defaultValue: false,
     },
+    referencia_evento: {
+        type: DataTypes.STRING(160),
+        allowNull: true,
+        unique: true,
+    },
 }, {
     tableName: 'notificacion',
     timestamps: false,

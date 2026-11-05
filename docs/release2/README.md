@@ -1,13 +1,13 @@
-# Release 2: base común de Fase 0
+# Release 2: base común y backend B
 
-**Estado: base técnica implementada y acuerdos comunes aprobados por el usuario.**
-Está preparada para la revisión cruzada A/B exigida por el PDF; no se certifica que
-esas personas ya la hayan revisado. Ver [validacion.md](validacion.md).
+**Estado: base de Fase 0 y paquetes B1–B6 implementados.** La revisión cruzada A/B
+y la aplicación de la migración en una base PostgreSQL de desarrollo siguen
+pendientes. Ver [validacion.md](validacion.md).
 
 ## Fuentes y alcance
 
-- Fuente principal: `Guia_backend_Release_2.pdf`, páginas 2, 7, 8 y 9 para Fase 0.
-  Páginas 3–6 y fases 1–3 describen funcionalidades posteriores; no se implementan.
+- Fuente principal: `Guia_backend_Release_2.pdf`, páginas 5–11 para los paquetes B1–B6,
+  contratos, integración y aceptación.
 - Contexto funcional: hoja `Backlog` del Excel adjunto `Hoja de cálculo sin título.xlsx`.
   Las asignaciones nominales de `Tareas` no delimitan el trabajo.
 - Base R1: `5f7d12ca0b020edfd49ba3bf90b9345dd4ea7488`, rama local de origen `work`;
@@ -16,10 +16,10 @@ esas personas ya la hayan revisado. Ver [validacion.md](validacion.md).
   No se crearon otras ramas ni se hicieron merges o rebases. El usuario autorizó
   posteriormente crear el commit y publicar esta rama en GitHub.
 - Las respuestas del usuario completan las propuestas del PDF; se registran en
-  [decisiones.md](decisiones.md), sin ampliar la implementación a fases posteriores.
+  [decisiones.md](decisiones.md).
 
-Solo se añaden documentación, contratos de prueba, fixtures y dobles. No se añaden
-endpoints, listeners, dependencias, tablas o modelos ni se conectan dobles a producción.
+La implementación B sigue las capas existentes de rutas, controladores, servicios,
+repositorios y modelos. No se conectan dobles a producción ni se añaden dependencias.
 
 ## Entregables
 
@@ -31,6 +31,8 @@ endpoints, listeners, dependencias, tablas o modelos ni se conectan dobles a pro
 | Trabajo independiente | [paralelo.md](paralelo.md) | Propiedad y cómo empezar sin código del otro |
 | Firmas, fixtures, dobles y verificador compartido | `src/stubs/release2/` | Escenarios ejecutables y sustitución por proveedor real |
 | Pruebas y evidencias | `test/release2-base.test.js`, [validacion.md](validacion.md) | Validación técnica y límites |
+| Endpoints y reglas B1–B6 | `src/routes/`, `src/controllers/`, `src/services/`, `src/repositories/`, `src/models/` | Usuarios, perfil, canjes, ranking, notificaciones y logros |
+| Persistencia B | `database/migrations/20261105_add_ranking_notifications_and_event_outbox.sql` | Configuración, exclusiones, deduplicación, outbox y estado top 10 |
 
 ## Contexto de historias de usuario
 
@@ -57,7 +59,7 @@ npm test
 node --input-type=module -e "import {crearDobleBaseRelease2} from './src/stubs/release2/estadisticas.doble.js'; import {verificarContratoEstadisticas} from './src/stubs/release2/verificar-estadisticas.js'; await verificarContratoEstadisticas(crearDobleBaseRelease2()); console.log('Contrato A/B correcto');"
 ```
 
-El verificador se podrá ejecutar con el proveedor real y los mismos datos en una
-BD de prueba aislada. No confundir el doble con una consulta real, ni los fixtures
-de recuperación con una cola que ya recupera eventos. R2 real se implementa en las
-fases siguientes. El proyecto es JavaScript ESM y no define comando de compilación.
+El contrato de ranking configurado es `{ desde, hasta, excluidos }`; el criterio
+permanece fijo en puntos ganados según los acuerdos. La migración debe aplicarse
+antes de iniciar la versión nueva del backend. El proyecto es JavaScript ESM y no
+define comando de compilación.

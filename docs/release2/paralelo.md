@@ -15,6 +15,12 @@ Los límites A/B del PDF son límites de módulos, no asignaciones nominales del
 | `docs/release2/datos.md` | A, revisión B | Contrato/fixture antes de cambiar dato compartido |
 | `docs/release2/contratos.md` | B, revisión A | No modificar firmas, permiso o payload unilateralmente |
 
+Para esta entrega individual se implementaron los paquetes B1–B6 y las piezas
+compartidas indispensables para conectarlos: consulta de actividad de solo lectura,
+escritura del outbox desde los productores existentes y esquema/migración. La
+propiedad A/B de la tabla describe el reparto de equipo del PDF; la migración aún
+requiere aplicación y revisión cruzada.
+
 `index.routes.js` importa `usuario.routes.js` y `premios.routes.js`. No usar los
 archivos antiguos de nombre similar ni la fachada obtenerInfo por suposición; no
 eliminar globalmente `src/stubs/`. Cada módulo preserva las capas ESM existentes.
@@ -32,12 +38,13 @@ A prepara persistencia de pendiente atómica con su efecto sin esperar un consum
 funcionando. La implementación SQL se revisa en A6, sin delegar su diseño a una
 entrega tardía de B ni introducir la cola en esta fase.
 
-## Inicio de B sin esperar a A
+## Implementación de B
 
-B usa `crearDobleBaseRelease2()` para histórico, meses, cuenta sin actividad y
-cuenta inexistente. Puede desarrollar pruebas de ranking/logros con ganado distinto
-de saldo, sin migraciones ni consultas reales de A. Fixtures de avisos, canje R2 y
-entrega parcial permiten preparar pruebas de consumidores sin el productor real.
+B1/B2 ofrecen administración paginada y perfil restringido. B3 bloquea saldo y
+stock, confirma canje y outbox en una transacción. B4 usa el proveedor de actividad
+sin repetir joins en ranking/logros, con período, exclusiones y desempate estable.
+B5 consume eventos pendientes con deduplicación y reintentos; B6 evalúa ganado y
+otorga una sola vez. Las pruebas siguen usando los dobles para aislar los contratos.
 
 Ejemplo ejecutable desde la raíz con `node --input-type=module`:
 
@@ -50,8 +57,7 @@ await verificarContratoEstadisticas(proveedor);
 const datos = await proveedor.listarActividadPorUsuario({
     desde: '2026-01-01', hasta: '2026-02-01',
 });
-// Usar proveedor como dependencia simulada del futuro consumidor de B.
-// No montar el doble en Express ni reemplazar globalmente servicios R1.
+// Usar el doble solo en pruebas; producción usa el repositorio de métricas.
 ```
 
 Para un escenario propio, `crearDobleEstadisticas(escenarios)` admite respuestas o
@@ -66,24 +72,20 @@ real se sustituye en la prueba y se ejecuta el **mismo verificador**, usando una
 **aislada** con los datos de fixture; no ejecutarlo contra cuentas reales con IDs
 coincidentes. B no necesita reconstruir joins ni A decidir posiciones.
 
-Conectar esta dependencia a servicios de producción corresponde a fases 1–2; no
-se refactorizan servicios R1 para inyectar un doble en Fase 0. Cambios compartidos
-empiezan por contrato y fixture, no por una nueva interfaz incompatible.
+El ranking y los logros consumen el mismo contrato que valida el verificador.
+La implementación real agrega la lectura de actividad en `metrica.repository.js`;
+los residuos y sus eventos pendientes se confirman juntos en `residuo.service.js`.
 
-Las reglas de fechas, ganado, participación y permisos ya están aprobadas. No hay
-un entregable funcional del otro desarrollador que impida comenzar pruebas aisladas.
-El proveedor real, SQL, trabajadores y montaje de rutas son hitos posteriores;
-los detalles locales que aún requieran decisión del usuario se formalizan antes
-de implementarlos, sin cambiar por suposición la base común.
+Las reglas de fechas, ganado, permisos y configuración del ranking están aprobadas.
+El JSON de configuración implementado es `{ desde, hasta, excluidos }`, con criterio
+fijo por puntos ganados y períodos `[desde,hasta)`.
 
 ## Límites y aceptación
 
-- R1 sigue con bus en memoria; todavía no recupera eventos tras caída. Esa garantía
-  R2 debe implementarse y probarse en fases posteriores, no se presume validada.
-- A centraliza SQL y B routers/eventos: sigue habiendo coordinación de integración,
-  aunque pueden trabajar con módulos y dobles sin esperar código del otro.
-- Los tipos SQL y contratos locales de nuevos endpoints no fijados por el PDF no
-  se deciden unilateralmente durante esta fase.
+- El bus EventEmitter se conserva para compatibilidad; los consumidores B procesan
+  el outbox persistente para que una caída no pierda notificaciones ni logros.
+- La migración SQL está añadida, pero no se ejecutó en una base PostgreSQL durante
+  esta sesión. El backend nuevo requiere aplicarla antes de iniciar.
 - La única rama autorizada es Sprint2/Modificaciones-Angello. Las ramas feature del
   PDF no se crean aquí; no hay merges/rebases autorizados. El usuario autorizó
   posteriormente publicar esta rama en GitHub.

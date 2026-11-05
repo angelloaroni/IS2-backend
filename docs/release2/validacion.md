@@ -1,4 +1,32 @@
-# Evidencias y límites de Fase 0
+# Evidencias y límites de Release 2
+
+## Implementación de la parte B
+
+Fecha: 5 de noviembre de 2026 (`America/Lima`).
+
+| Verificación | Resultado | Alcance |
+| --- | --- | --- |
+| `node --test test/release2-b.test.js test/release2-base.test.js` | 25 aprobadas | Usuarios, perfil, canje, ranking, filtros, logros, outbox y top 10 con dobles |
+| `node --test` | 43 aprobadas | Suite completa del backend |
+| Migración R2 | Creada, no aplicada | Debe ejecutarse en una base PostgreSQL antes de desplegar |
+| PostgreSQL concurrente / reinicio del proceso | Pendiente | Las pruebas unitarias no sustituyen integración real |
+
+La implementación B cubre B1–B6. El contrato de ranking usa `{ desde, hasta,
+excluidos }`; el criterio queda fijo en puntos ganados según D03/D13. El canje
+confirma canje, saldo, stock y evento pendiente en una transacción. Logros y
+notificaciones procesan el outbox de manera idempotente y registran errores con
+reintentos. El top 10 mantiene el estado por mes Lima para detectar transiciones.
+
+La consulta compartida de actividad conserva los campos del contrato A → B,
+deduplica residuos al agrupar por id y devuelve error explícito ante historial con
+fechas o usuarios ambiguos. La fecha DATE nueva se persiste como día Lima; el
+payload público del evento conserva su `Date`.
+
+La suite verifica contratos y reglas con dobles. No se conectó a PostgreSQL ni se
+aplicó la migración en este trabajo; el arranque nuevo requiere la migración
+`20261105_add_ranking_notifications_and_event_outbox.sql`.
+
+## Evidencias históricas de Fase 0
 
 Fecha local: 4 de noviembre de 2026 (`America/Lima`).
 Rama: `Sprint2/Modificaciones-Angello`, creada desde `work` en
@@ -46,10 +74,9 @@ concurrencia real ni implementa A6.
   no se inventó un build ni se incorporaron herramientas.
 - No se afirma cobertura exhaustiva de cada HU de R1; se conserva su implementación,
   pasa la suite disponible y se verifica el flujo funcional descrito.
-- No se han creado ni probado migraciones R2: implementación A6 de Fase 1 y
-  definición física del esquema en A6. No hay cambios de BD/modelos en este trabajo.
-- Los dobles permiten comenzar pruebas aisladas, pero no prueban consultas R2
-  reales, ranking, dashboards, concurrencia de canjes o entrega recuperable.
+- La migración R2 de B se creó, pero no se ejecutó ni se probó contra PostgreSQL.
+- Los dobles validan contratos, no sustituyen pruebas PostgreSQL de consultas,
+  concurrencia de canjes, recuperación tras reinicio ni locking del top 10.
 - Los acuerdos comunes de [decisiones.md](decisiones.md) y la rama como base de
   integración ya fueron aprobados por el usuario. Falta la revisión cruzada A/B
   exigida por el PDF: la base técnica está implementada, pero no se declara el

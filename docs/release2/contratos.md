@@ -1,7 +1,8 @@
 # Contratos de API y eventos
 
 Fuente: PDF, páginas 2, 4, 6 y 8, y [acuerdos aprobados](decisiones.md).
-La documentación no activa endpoints, listeners o cambios de base de datos.
+Las rutas de B descritas aquí están implementadas; requieren aplicar la migración
+de Release 2 antes de iniciar el backend.
 
 ## Compatibilidad de Release 1
 
@@ -33,15 +34,16 @@ La documentación no activa endpoints, listeners o cambios de base de datos.
 porTipoYPeriodo. `obtenerTachosCercanos({lat,lng,radio})` no recibe idUser. No editar
 archivos antiguos o vacíos por similitud de nombre con los routers activos.
 
-## Rutas de R2 formalizadas para implementación posterior
+## Rutas de R2 implementadas
 
 | Ruta bajo `/api` | Permiso | Alcance acordado |
 | --- | --- | --- |
 | `GET /dashboard/materiales` | Solo admin | Kg/cantidad por material/período; filtros compartidos desde/hasta; totales y series vacías coherentes |
 | `GET /dashboard/participacion` | Solo admin | Participantes distintos, denominador y tasa aprobados en datos.md |
-| `GET /usuarios/admin`, `GET/PATCH /usuarios/admin/:id` | Solo admin | Búsqueda/paginación/detalle; edición solo nombre y estado; sin hashes |
+| `GET /usuarios/admin?pagina=1&limite=20&q=ana` | Solo admin | Búsqueda/paginación; sin hashes |
+| `GET/PATCH /usuarios/admin/:id` | Solo admin | Detalle; edición solo nombre y estado |
 | `PATCH /usuarios/me` | Autenticado, identidad del token | Solo nombre |
-| `GET /ranking/config`, `PUT /ranking/config` | Solo admin, ambos métodos | Criterios/períodos y exclusiones persistidos en fases posteriores |
+| `GET/PUT /ranking/config` | Solo admin, ambos métodos | `PUT` reemplaza `{desde, hasta, excluidos}` |
 | `GET /ranking/reciclador-mes?mes=YYYY-MM` | Cuenta registrada activa, JWT | Mes Lima; ganador o null sin actividad |
 
 Campos desconocidos y código/rol/saldo/contraseña no se modifican mediante PATCH
@@ -52,13 +54,14 @@ consultarlos no otorga permiso para leer o modificar configuración.
 HU12, por decisión delegada: mantener posiciones calculadas por puntos ganados
 DESC e id_user ASC. Excluir participantes solo del ranking no bloquea su cuenta.
 Reiniciar selecciona otro período sin borrar actividad. Top, posición propia y
-ganador deben usar un solo motor y configuración efectiva. No hay edición manual
-de posiciones. No se crean endpoints adicionales para estas operaciones en Fase 0.
+ganador usan un solo motor. No hay edición manual de posiciones. La configuración
+persiste límites opcionales `[desde,hasta)` y una lista de ids de usuarios excluidos;
+el orden sigue fijo por puntos ganados DESC e `id_user` ASC. GET `/ranking` puede
+recibir `desde` y/o `hasta` para una consulta sin cambiar la configuración.
 
-Las nuevas respuestas locales de dashboard, parámetros de paginación y esquema
-concreto de PUT config no se inventan aquí: su implementación posterior requiere
-formalizar esos detalles con el usuario antes de cambiarlos, conservando las rutas,
-permisos, firmas entre módulos y convenciones aprobadas de esta base.
+La lista admin responde `{ usuarios, pagina: { actual, limite, total, paginas } }`.
+La respuesta del ranking conserva `top`, `total_usuarios` y `usuario`, y agrega
+`criterio` y `periodo`. GET del reciclador responde `{ mes, criterio, ganador }`.
 
 ## Interfaces A → B
 
@@ -86,7 +89,8 @@ No se modifica el método actual del repositorio de logros para conectarlo al do
 
 ## Eventos existentes y ampliación acordada
 
-`src/utils/eventos.js` conserva nombres y bus actual; `listeners.js` no se modifica.
+`src/utils/eventos.js` conserva nombres y bus actual. `listeners.js` inicia el
+consumidor persistente de B; no se ejecuta en paralelo con listeners B en memoria.
 
 | Evento existente | Payload R1 | Regla |
 | --- | --- | --- |
@@ -94,9 +98,10 @@ No se modifica el método actual del repositorio de logros para conectarlo al do
 | `logro.otorgado` | idUser, idLogro, nombre | B → B solo tras inserción nueva; no emitir si ya existía |
 | `premio.canjeado` | idUser, idPremio, nombrePremio | B → B después del canje confirmado |
 
-Para R2 el evento de canje añadirá **idCanje = id_usuario_premio**, aprobado por el
-usuario. Ambos payloads se muestran por separado en fixtures para no afirmar que
-R1 ya incluye el identificador. No renombrar ni retirar campos vigentes.
+El evento de canje R2 incluye **idCanje = id_usuario_premio**. Los productores
+persisten los eventos pendientes en la misma transacción del efecto; el consumidor
+de B confirma cada efecto y su entrega conjuntamente, con reintentos y referencias
+idempotentes. Se conserva el payload de `residuo.registrado`.
 
 Ejemplo compatible del PDF:
 
@@ -124,19 +129,20 @@ HU19 es bandeja API persistida, sin añadir push o correo externo.
 | Novedad | Usuarios activos | Referencia estable de la novedad y consumidor/destinatario |
 
 Entrar de nuevo al top es una transición distinta; reintentar la misma transición
-no crea otro aviso. No notificar cada lectura del ranking. No definir nombres de
-nuevos eventos o campos no solicitados hasta formalizar su implementación.
+no crea otro aviso. El consumidor persiste el estado del top 10 por mes Lima y
+solo notifica al detectar una entrada. Leer el ranking no crea notificaciones.
 
 Se exige recuperación tras caída: persistir pendiente en transacción del productor;
 entrega y efecto se confirman juntos por consumidor. Reintentos conservan referencia
 y destinatario; cada consumidor guarda su entrega, de modo que logros procesado no
-oculte una notificación pendiente. No activar simultáneamente el camino nuevo y un
-listener viejo que repita el mismo efecto. A conserva atomicidad de datos; B conserva
-el canal y consumidores. Se debe validar reinicio/concurrencia en fases posteriores.
+oculte una notificación pendiente. El outbox registra `residuo.registrado` dentro
+de la transacción de reciclaje y los productores B guardan canjes, logros, altas y
+premios nuevos con sus efectos. La migración incluye backoff/reintentos y el
+marcador de entrega por consumidor.
 
-Los fixtures publican entrega parcial y reintento del mismo evento, no una cola ni
-un trabajador. El bus R1 en memoria no cumple todavía la garantía R2: implementar
-persistencia y reintentos ahora ampliaría el alcance de Fase 0.
+Los fixtures siguen siendo ejemplos; la cola productiva vive en
+`evento_pendiente`/`entrega_evento`. El trabajador se inicia desde
+`src/utils/listeners.js`; no se añade push o correo externo.
 
 ## MQTT conservado
 

@@ -13,12 +13,14 @@ Fuente: PDF, páginas 2, 7 y 8, y [acuerdos del usuario](decisiones.md).
 | Tacho | `tachointeligente` | `estado` administrativo, `capacidad` boolean y `porcentaje` 0–100 son distintos |
 | Canje | `usuario_premio` | Referencia `id_usuario_premio`, usuario, premio y fecha |
 | Logros | `logros`, `logros_usuario` | Condición estructurada, PK compuesta usuario/logro |
-| Avisos | `notificacion` | Bandeja propia; eventos actuales en memoria |
+| Avisos | `notificacion` | Bandeja propia con referencia idempotente; outbox por consumidor |
 
 `registrarResiduo` confirma residuo, historial y saldo en una transacción; emite
-`residuo.registrado` después del commit. Se mantienen 10 puntos/kg para `plastico`,
-`papel/carton`, `organicos`. El usuario confirmó que esa tarifa rigió históricamente.
-El evento incluye ganado; eso no significa que R1 lo persista por actividad.
+`residuo.registrado` después del commit. En R2 el mismo evento queda además
+persistido en el outbox dentro de la transacción. Se mantienen 10 puntos/kg para
+`plastico`, `papel/carton`, `organicos`. El usuario confirmó que esa tarifa rigió
+históricamente; el proveedor compartido deriva ganado como peso × 10 sin consultar
+el saldo canjeable.
 
 ## Consultas compartidas A → B
 
@@ -41,18 +43,19 @@ listarActividadPorUsuario({ desde, hasta } = {})
 - No cambiar `obtenerMetricas(idUser)` ni `obtenerTachosCercanos({lat,lng,radio})`;
   no añadir `idUser` a cercanía. Métricas mantiene sus campos de R1.
 
-El proveedor real corresponde a A6 (Fase 1). B usa el doble publicado sin duplicar
-joins en repositorios de ranking/logros. A compara sus consultas con los mismos
-resultados sin esperar al motor de B. No hay conexión nueva a producción en Fase 0.
+El proveedor está conectado en `src/repositories/metrica.repository.js` y mantiene
+las firmas del contrato. B no duplica joins en los repositorios de ranking/logros.
+El doble sigue reservado para pruebas aisladas. A6 podrá reemplazar la derivación
+de puntos por actividad persistida sin cambiar estas firmas.
 
 ## Períodos y fechas aprobados
 
 Mes calendario `America/Lima`, límites opcionales `YYYY-MM-DD` y `[desde,hasta)`.
 `desde` se incluye, `hasta` se excluye. Los DATE históricos se interpretan como
 **días de Lima**, sin convertirlos en supuestos instantes UTC. No reconstruir una
-hora que nunca se guardó. Para actividad nueva se conserva además el instante UTC;
-se convierte explícitamente a Lima para período y filtros. El formato del evento
-R1 sigue siendo `Date`; no se modifica el historial público actual.
+hora que nunca se guardó. Para eventos nuevos el payload persistido conserva el
+instante UTC; la columna DATE del historial se escribe como día de Lima. El formato
+público del evento sigue siendo `Date`.
 
 Ejemplo: enero tiene desde `2026-01-01` y hasta `2026-02-01`.
 `2026-02-01T04:59:59.999Z` sigue en enero de Lima;
@@ -78,8 +81,11 @@ los datos compartidos y la política temporal de arriba son comunes y estables.
 
 ## Esquema propuesto y secuencia de migración para A6
 
-Esta sección es el entregable de diseño de Fase 0, **no SQL aplicado**. No se
-modifican `schema.sql`, modelos ni la BD de R1.
+Esta sección sigue describiendo el entregable de diseño de Fase 0 para los campos
+de actividad de A6. La migración B de configuración, exclusiones, referencias de
+notificación, outbox y estado top 10 está en
+`database/migrations/20261105_add_ranking_notifications_and_event_outbox.sql`;
+no se aplicó a una BD durante esta sesión.
 
 1. Persistir `puntos_ganados` por residuo y conservar una relación de actividad sin
    doble conteo. `id_residuo` es referencia estable; verificar cardinalidad del
@@ -102,8 +108,8 @@ modifican `schema.sql`, modelos ni la BD de R1.
 
 El PDF advierte un COMMIT sin BEGIN en la migración de estado del tacho. La base
 inspeccionada `20261018_add_tacho_status_fields.sql` sí contiene ambos; no se cambia.
-Las migraciones reales y sus pruebas son Fase 1/A6, no una omisión de implementación
-que deba resolverse introduciendo funcionalidad posterior en Fase 0.
+A6 aún debe persistir `puntos_ganados` por actividad y probar sus consultas en una
+BD aislada.
 
 ## Fixtures compartidos
 

@@ -1,6 +1,6 @@
 import AppError from '../utils/AppError.js';
 import LogroRepository from '../repositories/logro.repository.js';
-import eventos, { EVENTOS } from '../utils/eventos.js';
+import { fechaActualLima } from '../utils/periodo.js';
 
 const logroRepository = new LogroRepository();
 const TIPOS_CONDICION = new Set([
@@ -27,10 +27,24 @@ export async function obtenerLogros(idUser) {
 }
 
 export async function agregarLogro(data = {}) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new AppError('Los datos del logro no son válidos', 400);
+    }
+    const camposDesconocidos = Object.keys(data)
+        .filter((campo) => !['id_logro', 'nombre', 'tipo_condicion', 'valor_objetivo'].includes(campo));
+    if (camposDesconocidos.length > 0) {
+        throw new AppError(`Campos no permitidos: ${camposDesconocidos.join(', ')}`, 400);
+    }
     const id = Number(data.id_logro);
-    const nombre = String(data.nombre ?? '').trim();
-    const tipoCondicion = String(data.tipo_condicion ?? '').trim().toLowerCase();
-    const valorObjetivo = Number(data.valor_objetivo);
+    const nombre = typeof data.nombre === 'string' ? data.nombre.trim() : '';
+    const tipoCondicion = typeof data.tipo_condicion === 'string'
+        ? data.tipo_condicion.trim().toLowerCase()
+        : '';
+    const valorObjetivo = typeof data.valor_objetivo === 'boolean'
+        || data.valor_objetivo === null
+        || data.valor_objetivo === ''
+        ? Number.NaN
+        : Number(data.valor_objetivo);
 
     if (!Number.isSafeInteger(id) || id <= 0) {
         throw new AppError('id_logro debe ser un entero positivo', 400);
@@ -60,14 +74,14 @@ export async function agregarLogro(data = {}) {
     return logro.toJSON();
 }
 
-export async function evaluarLogros(idUser) {
+export async function evaluarLogros(idUser, { transaction = null } = {}) {
     const [logros, estadisticas, idsOtorgados] = await Promise.all([
         logroRepository.listarTodos(),
         logroRepository.obtenerEstadisticasUsuario(idUser),
         logroRepository.listarIdsOtorgados(idUser),
     ]);
 
-    const fechaObtencion = new Date().toISOString().slice(0, 10);
+    const fechaObtencion = fechaActualLima();
     const nuevosLogros = [];
 
     for (const logro of logros) {
@@ -76,28 +90,18 @@ export async function evaluarLogros(idUser) {
 
         const progreso = estadisticas[logro.tipo_condicion];
         if (progreso >= Number(logro.valor_objetivo)) {
-            await logroRepository.otorgar(idUser, idLogro, fechaObtencion);
-            idsOtorgados.add(idLogro);
-            const logroOtorgado = logro.toJSON();
-            nuevosLogros.push(logroOtorgado);
-            eventos.emit(EVENTOS.LOGRO_OTORGADO, {
+            const [, creado] = await logroRepository.otorgarUnaVez(
                 idUser,
                 idLogro,
-                nombre: logroOtorgado.nombre,
-            });
+                fechaObtencion,
+                { transaction }
+            );
+            idsOtorgados.add(idLogro);
+            if (!creado) continue;
+            const logroOtorgado = logro.toJSON();
+            nuevosLogros.push(logroOtorgado);
         }
     }
 
     return nuevosLogros;
 }
-
-eventos.on(EVENTOS.RESIDUO_REGISTRADO, async ({ idUser }) => {
-    try {
-        const nuevosLogros = await evaluarLogros(idUser);
-        if (nuevosLogros.length > 0) {
-            console.info(`Logros otorgados al usuario ${idUser}: ${nuevosLogros.map(({ nombre }) => nombre).join(', ')}`);
-        }
-    } catch (error) {
-        console.error('Error evaluando logros tras registrar un residuo:', error);
-    }
-});

@@ -1,6 +1,7 @@
 import Usuario from '../models/Usuario.js';
 import RepositoryBase from './repository.base.js';
 import AppError from '../utils/AppError.js';
+import { Op } from 'sequelize';
 
 class UsuarioRepository extends RepositoryBase {
     constructor() { super(Usuario); }
@@ -35,11 +36,43 @@ class UsuarioRepository extends RepositoryBase {
         return usuario;
     }
 
+    async listarAdministracion({ busqueda, limit, offset }) {
+        const where = {};
+        if (busqueda) {
+            where[Op.or] = [
+                { nombre: { [Op.iLike]: `%${busqueda}%` } },
+                { cod_user: { [Op.like]: `%${busqueda}%` } },
+            ];
+        }
+
+        return this.model.findAndCountAll({
+            where,
+            attributes: [
+                'id_user',
+                'cod_user',
+                'nombre',
+                'puntos',
+                'tipo',
+                'correo_institucional',
+                'estado',
+            ],
+            order: [['id_user', 'ASC']],
+            limit,
+            offset,
+        });
+    }
+
     async desactivarPorId(id) {
         const usuario = await this.buscarPorId(id);
         if (usuario.estado !== false) {
             await usuario.update({ estado: false });
         }
+        return usuario;
+    }
+
+    async actualizarPorId(id, cambios) {
+        const usuario = await this.buscarPorId(id);
+        await usuario.update(cambios);
         return usuario;
     }
 

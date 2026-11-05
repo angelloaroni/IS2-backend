@@ -6,6 +6,8 @@ import residuoRepository from '../repositories/residuo.repository.js';
 import tachoRepository from '../repositories/tacho.repository.js';
 import UsuarioRepository from '../repositories/usuario.repository.js';
 import { calcularPuntos, validarRegistroResiduo } from './puntos.service.js';
+import eventoRepository from '../repositories/evento.repository.js';
+import { fechaActualLima } from '../utils/periodo.js';
 
 export function validarMensajeTacho(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -98,6 +100,7 @@ export async function registrarResiduo(data) {
     await tachoRepository.buscarActivoPorId(idTacho, { transaction });
 
     const fecha = new Date();
+    const fechaLima = fechaActualLima(fecha);
     const puntosGanados = calcularPuntos(peso, tipo);
     const residuo = await residuoRepository.crear({
       peso,
@@ -108,13 +111,27 @@ export async function registrarResiduo(data) {
     }, { transaction });
 
     await historialRepository.crear({
-      fecha,
+      fecha: fechaLima,
       id_user: idUser,
       id_tacho: idTacho,
       id_residuo: residuo.id_residuo,
     }, { transaction });
 
     await usuarioRepository.sumarPuntos(idUser, puntosGanados, { transaction });
+
+    await eventoRepository.registrar({
+      tipo: 'residuo.registrado',
+      referencia: `residuo:${residuo.id_residuo}`,
+      payload: {
+        idUser,
+        idResiduo: residuo.id_residuo,
+        idTacho,
+        tipo,
+        peso,
+        puntosGanados,
+        fecha,
+      },
+    }, { transaction });
 
     await transaction.commit();
 
