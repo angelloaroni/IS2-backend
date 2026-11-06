@@ -11,6 +11,10 @@ const Residuo = sequelize.define('Residuo', {
 		type: DataTypes.FLOAT,
 		allowNull: false
 	},
+	puntos_ganados: {
+		type: DataTypes.DOUBLE,
+		allowNull: false
+	},
 	tipo: {
 		type: DataTypes.STRING(32),
 		allowNull: false

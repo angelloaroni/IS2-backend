@@ -104,6 +104,7 @@ export async function registrarResiduo(data) {
     const puntosGanados = calcularPuntos(peso, tipo);
     const residuo = await residuoRepository.crear({
       peso,
+      puntos_ganados: puntosGanados,
       tipo,
       idempotency_key: idempotencyKey,
       id_user: idUser,
@@ -112,6 +113,7 @@ export async function registrarResiduo(data) {
 
     await historialRepository.crear({
       fecha: fechaLima,
+      fecha_instante: fecha,
       id_user: idUser,
       id_tacho: idTacho,
       id_residuo: residuo.id_residuo,
@@ -119,23 +121,7 @@ export async function registrarResiduo(data) {
 
     await usuarioRepository.sumarPuntos(idUser, puntosGanados, { transaction });
 
-    await eventoRepository.registrar({
-      tipo: 'residuo.registrado',
-      referencia: `residuo:${residuo.id_residuo}`,
-      payload: {
-        idUser,
-        idResiduo: residuo.id_residuo,
-        idTacho,
-        tipo,
-        peso,
-        puntosGanados,
-        fecha,
-      },
-    }, { transaction });
-
-    await transaction.commit();
-
-    eventos.emit(EVENTOS.RESIDUO_REGISTRADO, {
+    const evento = {
       idUser,
       idResiduo: residuo.id_residuo,
       idTacho,
@@ -143,7 +129,17 @@ export async function registrarResiduo(data) {
       peso,
       puntosGanados,
       fecha,
-    });
+    };
+    await eventoRepository.registrar({
+      tipo: 'residuo.registrado',
+      referencia: `residuo:${residuo.id_residuo}`,
+      payload: evento,
+    }, { transaction });
+
+    await transaction.commit();
+
+    // Los listeners R1 se conservan hasta la conexión coordinada de Fase 2.
+    eventos.emit(EVENTOS.RESIDUO_REGISTRADO, evento);
 
     return {
       idResiduo: residuo.id_residuo,
