@@ -196,11 +196,36 @@ El backend se suscribe al broker Mosquitto al iniciar. La conexión y los dos te
 MQTT_BROKER_URL=mqtt://192.168.18.143:1883
 MQTT_TOPIC_TACHO_ESTADO=smartbin/status
 MQTT_TOPIC_EVENTO_RECICLAJE=smartbin/recycle
+MQTT_TOPIC_VALIDAR_ESTUDIANTE=smartbin/student/validate
+MQTT_TOPIC_RESPUESTA_ESTUDIANTE=smartbin/student/response
+MQTT_TOPIC_VALIDAR_PRODUCTO=smartbin/product/validate
+MQTT_TOPIC_RESPUESTA_PRODUCTO=smartbin/product/response
 MQTT_USERNAME=
 MQTT_PASSWORD=
 ```
 
 El usuario y la contraseña son opcionales, pero deben configurarse juntos. Protege el broker con autenticación y ACL para limitar qué dispositivos pueden publicar en estos temas; en redes no confiables, usa MQTT sobre TLS (`mqtts://`).
+
+El tema `smartbin/student/validate` acepta un JSON con `codUser` de ocho dígitos. El backend consulta `Usuario.cod_user` y publica en `smartbin/student/response` un JSON con el código recibido y un booleano `exists`; los códigos sin usuario asociado reciben `false`:
+
+```json
+{
+  "codUser": "00001001",
+  "exists": true
+}
+```
+
+El tema `smartbin/product/validate` acepta un JSON con `codProducto` de ocho dígitos. El backend consulta la tabla `producto` y responde en `smartbin/product/response` con el código, el `tipo` y el `peso` numérico en gramos; si el código no existe, el tipo es `desconocido` y el peso es `0`:
+
+```json
+{
+  "codProducto": "12345678",
+  "tipo": "plastico",
+  "peso": 25
+}
+```
+
+Los productos almacenan su código QR, nombre, peso en gramos y tipo. Los tipos permitidos son `plastico`, `pet`, `papel`, `carton`, `papel/carton` y `vidrio`.
 
 El tema `smartbin/status` recibe el identificador, coordenadas y capacidad del tacho:
 

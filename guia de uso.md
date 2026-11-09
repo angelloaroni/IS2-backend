@@ -306,13 +306,39 @@ El backend se suscribe al broker Mosquitto al iniciar. La conexión y los temas 
 MQTT_BROKER_URL=mqtt://0.tcp.sa.ngrok.io:12467
 MQTT_TOPIC_TACHO_ESTADO=smartbin/status
 MQTT_TOPIC_EVENTO_RECICLAJE=smartbin/recycle
+MQTT_TOPIC_VALIDAR_ESTUDIANTE=smartbin/student/validate
+MQTT_TOPIC_RESPUESTA_ESTUDIANTE=smartbin/student/response
+MQTT_TOPIC_VALIDAR_PRODUCTO=smartbin/product/validate
+MQTT_TOPIC_RESPUESTA_PRODUCTO=smartbin/product/response
 MQTT_USERNAME=
 MQTT_PASSWORD=
 ```
 
-La URL del broker y los temas anteriores corresponden a la configuración actual del proyecto. Si ya están definidos en `.env`, no necesitas cambiarlos para usar los formatos JSON de esta sección. El usuario y la contraseña son opcionales, pero deben configurarse juntos. El backend valida que `MQTT_USERNAME` y `MQTT_PASSWORD` no queden mezclados: si uno está definido, el otro también debe estarlo. Los temas de estado y reciclaje no pueden ser iguales.
+La URL del broker y los temas anteriores corresponden a la configuración actual del proyecto. Si ya están definidos en `.env`, no necesitas cambiarlos para usar los formatos JSON de esta sección. El usuario y la contraseña son opcionales, pero deben configurarse juntos. El backend valida que `MQTT_USERNAME` y `MQTT_PASSWORD` no queden mezclados: si uno está definido, el otro también debe estarlo. Todos los temas configurados deben ser distintos.
 
-### 3.1 Tema `smartbin/status`
+### 3.1 Validación de productos por QR
+
+El simulador publica el código QR como cadena numérica de ocho dígitos en `smartbin/product/validate`:
+
+```json
+{
+  "codProducto": "12345678"
+}
+```
+
+El backend busca el código en la tabla `producto` y publica en `smartbin/product/response`:
+
+```json
+{
+  "codProducto": "12345678",
+  "tipo": "plastico",
+  "peso": 25
+}
+```
+
+El campo `peso` es un valor numérico expresado en gramos. Cuando el código no está registrado, responde `"tipo": "desconocido"` y `"peso": 0`. Los productos almacenan su código QR, nombre, peso en gramos y tipo. Los tipos permitidos son `plastico`, `pet`, `papel`, `carton`, `papel/carton` y `vidrio`.
+
+### 3.2 Tema `smartbin/status`
 
 El dispositivo publica un objeto JSON con todos estos campos:
 
@@ -331,7 +357,7 @@ El dispositivo publica un objeto JSON con todos estos campos:
 
 `capacidad: true` indica que el dispositivo reporta el tacho lleno. Este mensaje no cambia el estado administrativo del tacho (`estado`). El backend persiste el estado recibido; **no envía alertas por correo** cuando el tacho se llena.
 
-### 3.2 Tema `smartbin/recycle`
+### 3.3 Tema `smartbin/recycle`
 
 El dispositivo publica un objeto JSON con este formato:
 
