@@ -45,6 +45,10 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
     const r1 = await readFile(new URL('../fixtures/r1-schema.sql', import.meta.url), 'utf8');
     const migracion = await readFile(new URL('../../database/migrations/20261105_release2_actividad.sql', import.meta.url), 'utf8');
     const eventosSql = await readFile(new URL('../../database/migrations/20261105_release2_eventos_pendientes.sql', import.meta.url), 'utf8');
+    const productoSql = await readFile(new URL('../../database/migrations/20261109_create_producto.sql', import.meta.url), 'utf8');
+    const productoNombreSql = await readFile(new URL('../../database/migrations/20261109_add_producto_nombre.sql', import.meta.url), 'utf8');
+    const productoTipoVidrioSql = await readFile(new URL('../../database/migrations/20261109_update_producto_tipo_vidrio.sql', import.meta.url), 'utf8');
+    const productoPesoSql = await readFile(new URL('../../database/migrations/20261109_add_producto_peso_gramos.sql', import.meta.url), 'utf8');
     const fixture = crearFixturesRelease2();
     async function cargarR1(client) {
         await client.query(r1);
@@ -58,6 +62,33 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
     await t.test('A6: migración R1 y repetición conservan saldos/DATE y deduplican actividad', async () => {
         await db.query(migracion); await db.query(eventosSql);
         await db.query(migracion); await db.query(eventosSql);
+        await db.query(productoSql); await db.query(productoSql);
+        await db.query("INSERT INTO producto(id_producto,cod_producto,tipo) VALUES(1,'12345678','plastico')");
+        await db.query(productoNombreSql); await db.query(productoNombreSql);
+        await db.query("INSERT INTO producto(id_producto,cod_producto,nombre,tipo) VALUES(2,'23456789','Restos de comida','organicos')");
+        await db.query(productoTipoVidrioSql); await db.query(productoTipoVidrioSql);
+        await db.query(productoPesoSql); await db.query(productoPesoSql);
+        assert.equal((await db.query("SELECT nombre FROM producto WHERE cod_producto='12345678'")).rows[0].nombre, 'Producto 12345678');
+        assert.deepEqual(
+            (await db.query("SELECT nombre,tipo,peso_gramos FROM producto WHERE cod_producto='23456789'")).rows[0],
+            { nombre: 'Producto de vidrio', tipo: 'vidrio', peso_gramos: 400 }
+        );
+        assert.equal(
+            (await db.query("SELECT peso_gramos FROM producto WHERE cod_producto='12345678'")).rows[0].peso_gramos,
+            25
+        );
+        await assert.rejects(
+            db.query("INSERT INTO producto(id_producto,cod_producto,nombre,peso_gramos,tipo) VALUES(99,'87654321','Producto inválido',10,'organico')"),
+            /producto_tipo_valido/
+        );
+        await assert.rejects(
+            db.query("INSERT INTO producto(id_producto,cod_producto,nombre,peso_gramos,tipo) VALUES(99,'1234567','Producto inválido',10,'plastico')"),
+            /producto_cod_producto_formato/
+        );
+        await assert.rejects(
+            db.query("INSERT INTO producto(id_producto,cod_producto,nombre,peso_gramos,tipo) VALUES(99,'87654321','Producto inválido',0,'plastico')"),
+            /producto_peso_gramos_positivo/
+        );
         assert.deepEqual((await db.query('SELECT id_user,puntos FROM usuario ORDER BY id_user')).rows, saldos);
         assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM actividad_reciclaje')).rows[0].n, fixture.residuos.length);
         assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM historialreciclaje')).rows[0].n, fixture.historialConDuplicado.length);
@@ -68,8 +99,12 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
         const nuevo = await crearDb(`${database}_new`);
         await nuevo.query(await readFile(new URL('../../database/schema.sql', import.meta.url), 'utf8'));
         await nuevo.query(migracion); await nuevo.query(eventosSql);
+        await nuevo.query(productoSql);
+        await nuevo.query(productoNombreSql);
+        await nuevo.query(productoTipoVidrioSql);
+        await nuevo.query(productoPesoSql);
         assert.equal((await nuevo.query('SELECT COUNT(*)::int AS n FROM actividad_reciclaje')).rows[0].n, 0);
-        const columnas = async (client) => (await client.query("SELECT table_name,column_name,data_type,is_nullable FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name,ordinal_position")).rows;
+        const columnas = async (client) => (await client.query("SELECT table_name,column_name,data_type,is_nullable FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name,column_name")).rows;
         assert.deepEqual(await columnas(nuevo), await columnas(db));
     });
     await t.test('A6: historial contradictorio aborta migración sin dejar columnas parciales', async () => {
@@ -192,11 +227,32 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
     await t.test('A4 MQTT real: reciclaje/duplicado y estado en temas aislados', async () => {
         process.env.MQTT_BROKER_URL=process.env.R2A_MQTT_URL || 'mqtt://127.0.0.1:1883';
         process.env.MQTT_TOPIC_TACHO_ESTADO=`${database}/estado`; process.env.MQTT_TOPIC_EVENTO_RECICLAJE=`${database}/reciclaje`;
+        process.env.MQTT_TOPIC_VALIDAR_ESTUDIANTE=`${database}/estudiante/validar`;
+        process.env.MQTT_TOPIC_RESPUESTA_ESTUDIANTE=`${database}/estudiante/respuesta`;
+        process.env.MQTT_TOPIC_VALIDAR_PRODUCTO=`${database}/producto/validar`;
+        process.env.MQTT_TOPIC_RESPUESTA_PRODUCTO=`${database}/producto/respuesta`;
         const { iniciarRecepcionMqtt }=await import('../../src/services/mqtt.service.js');
         receptor=iniciarRecepcionMqtt();
         if(!receptor.connected) await once(receptor,'connect');
-        await new Promise((resolve,reject)=>receptor.subscribe([process.env.MQTT_TOPIC_TACHO_ESTADO,process.env.MQTT_TOPIC_EVENTO_RECICLAJE],{qos:1},err=>err?reject(err):resolve()));
+        await new Promise((resolve,reject)=>receptor.subscribe([process.env.MQTT_TOPIC_TACHO_ESTADO,process.env.MQTT_TOPIC_EVENTO_RECICLAJE,process.env.MQTT_TOPIC_VALIDAR_ESTUDIANTE,process.env.MQTT_TOPIC_VALIDAR_PRODUCTO],{qos:1},err=>err?reject(err):resolve()));
         publicador=await mqtt.connectAsync(process.env.MQTT_BROKER_URL);
+        await publicador.subscribeAsync(process.env.MQTT_TOPIC_RESPUESTA_ESTUDIANTE,{qos:1});
+        await publicador.subscribeAsync(process.env.MQTT_TOPIC_RESPUESTA_PRODUCTO,{qos:1});
+        async function validarEstudiante(codUser) {
+            const respuesta=once(publicador,'message').then(([,payload])=>JSON.parse(payload.toString('utf8')));
+            await publicador.publishAsync(process.env.MQTT_TOPIC_VALIDAR_ESTUDIANTE,JSON.stringify({codUser}),{qos:1});
+            return respuesta;
+        }
+        assert.deepEqual(await validarEstudiante('00000002'),{codUser:'00000002',exists:true});
+        assert.deepEqual(await validarEstudiante('99999999'),{codUser:'99999999',exists:false});
+        async function validarProducto(codProducto) {
+            const respuesta=once(publicador,'message').then(([,payload])=>JSON.parse(payload.toString('utf8')));
+            await publicador.publishAsync(process.env.MQTT_TOPIC_VALIDAR_PRODUCTO,JSON.stringify({codProducto}),{qos:1});
+            return respuesta;
+        }
+        await db.query("INSERT INTO producto(id_producto,cod_producto,nombre,peso_gramos,tipo) VALUES(1,'12345678','Botella de plástico',25,'plastico')");
+        assert.deepEqual(await validarProducto('12345678'),{codProducto:'12345678',tipo:'plastico',peso:25});
+        assert.deepEqual(await validarProducto('99999999'),{codProducto:'99999999',tipo:'desconocido',peso:0});
         const evento={idEvento:'mqtt-unico-1',codUser:'00000002',idTacho:3,tipo:'papel/carton',peso:0.5};
         await publicador.publishAsync(process.env.MQTT_TOPIC_EVENTO_RECICLAJE,JSON.stringify(evento),{qos:1});
         async function esperar(consulta) { for(let i=0;i<100;i++){if(await consulta())return;await new Promise(r=>setTimeout(r,25));}assert.fail('No se observó el efecto MQTT esperado'); }

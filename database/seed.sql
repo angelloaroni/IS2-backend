@@ -8,6 +8,23 @@ INSERT INTO Usuario (cod_user, id_user, nombre, puntos, tipo, contrasena, estado
 ('00001002', 2, 'María Gómez', 320.0, 'Profesor', 'hashed_pass_456', TRUE),
 ('00001003', 3, 'Juan Quispe', 45.0, 'Externo', 'hashed_pass_789', TRUE);
 
+-- Inserción de Productos identificados por su código QR
+INSERT INTO Producto (id_producto, cod_producto, nombre, peso_gramos, tipo) VALUES
+(1, '12345678', 'Botella de plástico', 25, 'plastico'),
+(2, '23456789', 'Botella PET', 30, 'pet'),
+(3, '34567890', 'Periódico', 150, 'papel'),
+(4, '45678901', 'Caja de cartón', 350, 'carton'),
+(5, '56789012', 'Cuaderno', 300, 'papel/carton'),
+(6, '67890123', 'Frasco de vidrio', 400, 'vidrio'),
+(7, '78901234', 'Botella de vidrio', 500, 'vidrio');
+
+SELECT setval(
+  pg_get_serial_sequence('producto', 'id_producto'),
+  COALESCE(MAX(id_producto), 1),
+  MAX(id_producto) IS NOT NULL
+)
+FROM producto;
+
 -- Inserción de Tachos Inteligentes
 -- (Nota: capacidad como BOOL suele representar si está lleno o no, ej: FALSE = disponible/no lleno)
 INSERT INTO TachoInteligente (id_tacho, latitud, longitud, capacidad) VALUES
@@ -33,11 +50,11 @@ INSERT INTO Premio (id_premio, nombre, descripcion, costo, stock) VALUES
 -- ==========================================
 
 -- Inserción de Residuos
-INSERT INTO Residuo (id_residuo, peso, tipo, id_user, id_tacho) VALUES
-(1, 0.25, 'plastico', 1, 1),
-(2, 0.15, 'papel/carton', 1, 1),
-(3, 0.50, 'organico', 2, 2),
-(4, 0.40, 'vidrio', 3, 3);
+INSERT INTO Residuo (id_residuo, peso, tipo, puntos_ganados, id_user, id_tacho) VALUES
+(1, 0.25, 'plastico', 2.5, 1, 1),
+(2, 0.15, 'papel/carton', 1.5, 1, 1),
+(3, 0.50, 'organico', 5.0, 2, 2),
+(4, 0.40, 'vidrio', 4.0, 3, 3);
 
 -- Inserción de Logros de Usuario
 INSERT INTO Logros_Usuario (fecha_obtencion, id_logro, id_user) VALUES

@@ -22,7 +22,50 @@ Nota: este `README` solo contiene instrucciones de formato. Para más detalles, 
 
 ### Recepción de datos del tacho
 
-Los datos de los tachos se reciben por MQTT desde el broker Mosquitto en `192.168.18.143:1883` por defecto. El backend se suscribe a `smartbin/status` para el estado del tacho y a `smartbin/recycle` para eventos de reciclaje. La URL y los temas se pueden sobrescribir con `MQTT_BROKER_URL`, `MQTT_TOPIC_TACHO_ESTADO` y `MQTT_TOPIC_EVENTO_RECICLAJE`. Si el broker requiere autenticación, configura conjuntamente `MQTT_USERNAME` y `MQTT_PASSWORD`.
+Los datos de los tachos y las validaciones de estudiantes se reciben por MQTT desde el broker Mosquitto en `192.168.18.143:1883` por defecto. El backend se suscribe a `smartbin/status` para el estado del tacho, `smartbin/recycle` para eventos de reciclaje y `smartbin/student/validate` para validar códigos de estudiante. Las respuestas de validación se publican en `smartbin/student/response`. La URL y los temas se pueden sobrescribir con `MQTT_BROKER_URL`, `MQTT_TOPIC_TACHO_ESTADO`, `MQTT_TOPIC_EVENTO_RECICLAJE`, `MQTT_TOPIC_VALIDAR_ESTUDIANTE` y `MQTT_TOPIC_RESPUESTA_ESTUDIANTE`. Si el broker requiere autenticación, configura conjuntamente `MQTT_USERNAME` y `MQTT_PASSWORD`.
+
+El simulador solicita la validación enviando un código de ocho dígitos en JSON:
+
+```json
+{
+  "codUser": "00001001"
+}
+```
+
+El backend consulta `Usuario.cod_user` y publica tanto si el código existe como el código recibido:
+
+```json
+{
+  "codUser": "00001001",
+  "exists": true
+}
+```
+
+`exists` es `false` cuando no hay un usuario con ese código.
+
+### Validación de productos por QR
+
+El simulador envía un código numérico de ocho dígitos al tema `smartbin/product/validate`:
+
+```json
+{
+  "codProducto": "12345678"
+}
+```
+
+El backend busca el código en la tabla `producto` y responde en `smartbin/product/response` con el código, tipo y `peso` en gramos:
+
+```json
+{
+  "codProducto": "12345678",
+  "tipo": "plastico",
+  "peso": 25
+}
+```
+
+Si no encuentra el producto, responde con `"tipo": "desconocido"` y `"peso": 0`. Los temas se pueden configurar con `MQTT_TOPIC_VALIDAR_PRODUCTO` y `MQTT_TOPIC_RESPUESTA_PRODUCTO`.
+
+Los tipos permitidos en el catálogo son `plastico`, `pet`, `papel`, `carton`, `papel/carton` y `vidrio`. La tabla incluye código QR, nombre, peso en gramos y tipo. El esquema y los ejemplos se encuentran en `database/schema.sql` y `database/seed.sql`; para bases existentes, aplicar `database/migrations/20261109_create_producto.sql`, `database/migrations/20261109_add_producto_nombre.sql`, `database/migrations/20261109_update_producto_tipo_vidrio.sql` y `database/migrations/20261109_add_producto_peso_gramos.sql`, en ese orden.
 
 El tema `smartbin/status` recibe el identificador, ubicación y capacidad actual del tacho:
 
