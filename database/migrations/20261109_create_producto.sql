@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS public.producto
   CONSTRAINT producto_cod_producto_unique UNIQUE (cod_producto),
   CONSTRAINT producto_cod_producto_formato CHECK (cod_producto ~ '^[0-9]{8}$'),
   CONSTRAINT producto_tipo_valido CHECK (
-    tipo IN ('plastico', 'pet', 'papel', 'carton', 'papel/carton', 'vidrio')
+    tipo IN ('plastico', 'papel/carton', 'vidrio')
   )
 );
 

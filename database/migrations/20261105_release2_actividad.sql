@@ -7,7 +7,7 @@ ALTER TABLE public.historialreciclaje ADD COLUMN IF NOT EXISTS fecha_instante TI
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM public.residuo
-             WHERE tipo NOT IN ('plastico', 'papel/carton', 'organicos')
+             WHERE tipo NOT IN ('plastico', 'papel/carton', 'vidrio')
                 OR NOT (peso > 0 AND peso < 'Infinity'::DOUBLE PRECISION)) THEN
     RAISE EXCEPTION 'R2: hay residuos históricos con material o peso inválido; revisar antes de migrar';
   END IF;
@@ -57,7 +57,7 @@ SELECT r.id_residuo, r.id_user, r.id_tacho, r.tipo, r.peso, r.puntos_ganados,
         AND COUNT(DISTINCT h.fecha_instante) <= 1
         AND NOT BOOL_OR(h.fecha_instante IS NOT NULL
                         AND (h.fecha_instante AT TIME ZONE 'America/Lima')::DATE <> h.fecha)
-        AND r.tipo IN ('plastico', 'papel/carton', 'organicos')
+        AND r.tipo IN ('plastico', 'papel/carton', 'vidrio')
         AND r.peso > 0 AND r.peso < 'Infinity'::DOUBLE PRECISION) AS consistente
 FROM public.residuo r
 JOIN public.historialreciclaje h ON h.id_residuo = r.id_residuo

@@ -29,7 +29,7 @@ test('A4: código inexistente o cuenta inactiva se rechazan antes de cualquier e
 
 test('A4: material/peso/tacho inválidos no escriben aunque la cuenta exista', async (t) => {
     sinEscrituras(t, { id_user: 1, estado: true });
-    for (const cambios of [{ tipo: 'vidrio' }, { peso: 0 }, { peso: Infinity }, { idTacho: -1 }]) {
+    for (const cambios of [{ tipo: 'organicos' }, { peso: 0 }, { peso: Infinity }, { idTacho: -1 }]) {
         await assert.rejects(procesarJSONTacho({ ...mensaje, ...cambios }), { statusCode: 400 });
     }
 });

@@ -259,7 +259,7 @@ Authorization: Bearer <jwt>
 | Campo | Tipo | Requisito |
 |---|---|---|
 | `idTacho` | entero | Entero positivo; debe corresponder a un tacho activo. |
-| `tipo` | string | `plastico`, `papel/carton` u `organicos`. Acepta normalización de mayúsculas, espacios y acentos. |
+| `tipo` | string | `plastico`, `papel/carton` o `vidrio`. Acepta normalización de mayúsculas, espacios y acentos. |
 | `peso` | número | Finito y mayor que cero. |
 | `idempotencyKey` | string | Obligatoria, no vacía y hasta 128 caracteres. |
 
@@ -336,7 +336,7 @@ El backend busca el código en la tabla `producto` y publica en `smartbin/produc
 }
 ```
 
-El campo `peso` es un valor numérico expresado en gramos. Cuando el código no está registrado, responde `"tipo": "desconocido"` y `"peso": 0`. Los productos almacenan su código QR, nombre, peso en gramos y tipo. Los tipos permitidos son `plastico`, `pet`, `papel`, `carton`, `papel/carton` y `vidrio`.
+El campo `peso` es un valor numérico expresado en gramos. Cuando el código no está registrado, responde `"tipo": "desconocido"` y `"peso": 0`. Los productos almacenan su código QR, nombre, peso en gramos y tipo. Los únicos tipos permitidos son `plastico`, `papel/carton` y `vidrio`.
 
 ### 3.2 Tema `smartbin/status`
 
@@ -353,7 +353,7 @@ El dispositivo publica un objeto JSON con todos estos campos:
 }
 ```
 
-`id_tacho` debe ser un entero positivo; `tipo` texto de 1 a 32 caracteres; latitud y longitud deben estar dentro de sus rangos geográficos; `capacidad` debe ser booleano y `porcentaje` un número entre 0 y 100. El backend actualiza esos datos del tacho activo en la tabla `TachoInteligente`. `porcentaje` se guarda numéricamente en una escala de 0 a 100.
+`id_tacho` debe ser un entero positivo; `tipo` debe ser `plastico`, `papel/carton` o `vidrio`; latitud y longitud deben estar dentro de sus rangos geográficos; `capacidad` debe ser booleano y `porcentaje` un número entre 0 y 100. El backend actualiza esos datos del tacho activo en la tabla `TachoInteligente`. `porcentaje` se guarda numéricamente en una escala de 0 a 100.
 
 `capacidad: true` indica que el dispositivo reporta el tacho lleno. Este mensaje no cambia el estado administrativo del tacho (`estado`). El backend persiste el estado recibido; **no envía alertas por correo** cuando el tacho se llena.
 

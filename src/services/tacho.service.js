@@ -5,6 +5,7 @@ import tachoRepository from '../repositories/tacho.repository.js';
 const RADIO_TERRESTRE_METROS = 6371000;
 const RADIO_MAXIMO_METROS = 50000;
 const RADIO_PREDETERMINADO_METROS = 5000;
+const TIPOS_RESIDUO = new Set(['plastico', 'papel/carton', 'vidrio']);
 
 function convertirNumero(valor) {
     if (
@@ -38,10 +39,16 @@ function validarCapacidad(capacidad) {
 }
 
 function validarTipo(tipo) {
-    if (typeof tipo !== 'string' || !tipo.trim() || tipo.trim().length > 32) {
-        throw new AppError('El tipo de tacho debe contener entre 1 y 32 caracteres', 400);
+    if (typeof tipo !== 'string') {
+        throw new AppError('El tipo de tacho no es válido', 400);
     }
-    return tipo.trim();
+    const tipoNormalizado = tipo.trim().toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+    if (!TIPOS_RESIDUO.has(tipoNormalizado)) {
+        throw new AppError('El tipo de tacho no es válido', 400);
+    }
+    return tipoNormalizado;
 }
 
 function validarPorcentaje(porcentaje) {

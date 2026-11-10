@@ -7,8 +7,8 @@ export function crearFixturesRelease2() {
     const residuos = [
         { id_residuo: 42, id_user: 1, id_tacho: 3, tipo: 'plastico', peso: 0.25 },
         { id_residuo: 43, id_user: 1, id_tacho: 3, tipo: 'papel/carton', peso: 0.5 },
-        { id_residuo: 44, id_user: 2, id_tacho: 3, tipo: 'organicos', peso: 1 },
-        { id_residuo: 45, id_user: 1, id_tacho: 3, tipo: 'organicos', peso: 0.25 },
+        { id_residuo: 44, id_user: 2, id_tacho: 3, tipo: 'vidrio', peso: 1 },
+        { id_residuo: 45, id_user: 1, id_tacho: 3, tipo: 'vidrio', peso: 0.25 },
         { id_residuo: 46, id_user: 3, id_tacho: 3, tipo: 'papel/carton', peso: 0.5 },
         { id_residuo: 47, id_user: 4, id_tacho: 3, tipo: 'plastico', peso: 0.25 },
     ];
@@ -30,7 +30,7 @@ export function crearFixturesRelease2() {
         ],
         tachos: [
             { id_tacho: 3, tipo: 'plastico', latitud: -12.0464, longitud: -77.0428, capacidad: false, porcentaje: 25, estado: true },
-            { id_tacho: 4, tipo: 'organicos', latitud: -12.0464, longitud: -77.0428, capacidad: true, porcentaje: 100, estado: false },
+            { id_tacho: 4, tipo: 'vidrio', latitud: -12.0464, longitud: -77.0428, capacidad: true, porcentaje: 100, estado: false },
         ],
         residuos,
         historial,

@@ -17,10 +17,9 @@ Fuente: PDF, páginas 2, 7 y 8, y [acuerdos del usuario](decisiones.md).
 
 `registrarResiduo` confirma residuo, historial y saldo en una transacción; emite
 `residuo.registrado` después del commit. En R2 el mismo evento queda además
-persistido en el outbox dentro de la transacción. Se mantienen 10 puntos/kg para
-`plastico`, `papel/carton`, `organicos`. El usuario confirmó que esa tarifa rigió
-históricamente; el proveedor compartido deriva ganado como peso × 10 sin consultar
-el saldo canjeable.
+persistido en el outbox dentro de la transacción. Se mantiene la tarifa de
+10 puntos/kg para `plastico`, `papel/carton` y `vidrio`; el proveedor compartido
+deriva ganado como peso × 10 sin consultar el saldo canjeable.
 
 ## Consultas compartidas A → B
 

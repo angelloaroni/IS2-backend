@@ -162,7 +162,7 @@ El cliente autenticado puede usar `POST /api/residuos` (también hay rutas alter
 
 - `idUser` e `idTacho` deben ser enteros positivos.
 - El peso debe ser finito y mayor que cero.
-- Los únicos tipos aceptados son `plastico`, `papel/carton` y `organicos`. Se normalizan mayúsculas, espacios exteriores y acentos antes de validarlos.
+- Los únicos tipos aceptados son `plastico`, `papel/carton` y `vidrio`. Se normalizan mayúsculas, espacios exteriores y acentos antes de validarlos.
 - Se requiere `idempotencyKey`, texto no vacío de hasta 128 caracteres.
 - El usuario debe estar activo y el tacho debe existir y estar activo.
 
@@ -174,7 +174,7 @@ Las tarifas actuales son 10 puntos por kilogramo para cada material:
 |---|---:|
 | `plastico` | 10 puntos/kg |
 | `papel/carton` | 10 puntos/kg |
-| `organicos` | 10 puntos/kg |
+| `vidrio` | 10 puntos/kg |
 
 ```text
 puntosGanados = pesoEnKilogramos × tarifaDelTipo
@@ -225,7 +225,7 @@ El tema `smartbin/product/validate` acepta un JSON con `codProducto` de ocho dí
 }
 ```
 
-Los productos almacenan su código QR, nombre, peso en gramos y tipo. Los tipos permitidos son `plastico`, `pet`, `papel`, `carton`, `papel/carton` y `vidrio`.
+Los productos almacenan su código QR, nombre, peso en gramos y tipo. Los únicos tipos permitidos son `plastico`, `papel/carton` y `vidrio`.
 
 El tema `smartbin/status` recibe el identificador, coordenadas y capacidad del tacho:
 

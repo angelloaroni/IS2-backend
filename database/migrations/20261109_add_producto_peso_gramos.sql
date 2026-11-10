@@ -6,9 +6,6 @@ ALTER TABLE public.producto
 UPDATE public.producto
 SET peso_gramos = CASE tipo
   WHEN 'plastico' THEN 25
-  WHEN 'pet' THEN 30
-  WHEN 'papel' THEN 150
-  WHEN 'carton' THEN 350
   WHEN 'papel/carton' THEN 300
   WHEN 'vidrio' THEN 400
 END

@@ -51,7 +51,7 @@ test('actualiza los seis campos del nuevo JSON de estado MQTT', async () => {
     try {
         const estado = await actualizarEstadoTacho({
             id_tacho: 7,
-            tipo: 'plastico',
+            tipo: ' PLÁSTICO ',
             latitud: -12.0464,
             longitud: -77.0428,
             capacidad: true,
@@ -95,7 +95,7 @@ test('rechaza estados de tacho inválidos sin actualizar la base de datos', asyn
         await assert.rejects(
             actualizarEstadoTacho({
                 id_tacho: 7,
-                tipo: 'plastico',
+                tipo: 'organicos',
                 latitud: -12.0464,
                 longitud: -77.0428,
                 capacidad: true,
