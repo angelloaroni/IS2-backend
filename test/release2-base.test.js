@@ -88,7 +88,7 @@ test('dos consumidores y sus fixtures no comparten mutaciones ni alteran sus res
 
 test('datos compartidos cubren materiales, meses, cuentas y duplicados sin confundir unidades', () => {
     const fixture = crearFixturesRelease2();
-    assert.deepEqual([...new Set(fixture.residuos.map(({ tipo }) => tipo))].sort(), ['organicos', 'papel/carton', 'plastico']);
+    assert.deepEqual([...new Set(fixture.residuos.map(({ tipo }) => tipo))].sort(), ['papel/carton', 'plastico', 'vidrio']);
     assert.equal(new Set(fixture.historial.map(({ fecha }) => fecha.slice(0, 7))).size, 2);
     assert.ok(fixture.usuarios.some(({ estado }) => estado === false));
     assert.ok(fixture.usuarios.some(({ tipo }) => tipo === 'admin'));

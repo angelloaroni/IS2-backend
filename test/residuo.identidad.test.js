@@ -2,20 +2,24 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { procesarJSONTacho } from '../src/services/residuo.service.js';
 import UsuarioRepository from '../src/repositories/usuario.repository.js';
+import residuoRepository from '../src/repositories/residuo.repository.js';
 import sequelize from '../src/config/db.js';
 
-const mensaje = { idEvento: 'identidad-a4-1', codUser: '00000001', idTacho: 3, tipo: 'plastico', peso: 0.25 };
+const mensaje = { idEvento: 'tacho-3-evento-1', codUser: '00000001', idTacho: 3, tipo: 'plastico', peso: 0.25 };
 
 function sinEscrituras(t, usuario) {
     const buscar = UsuarioRepository.prototype.buscarPorCodigo;
+    const buscarIdempotencia = residuoRepository.buscarPorClaveIdempotencia;
     const transaction = sequelize.transaction;
     UsuarioRepository.prototype.buscarPorCodigo = async (codigo) => {
         assert.equal(codigo, mensaje.codUser);
         return usuario;
     };
+    residuoRepository.buscarPorClaveIdempotencia = async () => null;
     sequelize.transaction = async () => assert.fail('no debe abrir transacción para una entrada rechazada');
     t.after(() => {
         UsuarioRepository.prototype.buscarPorCodigo = buscar;
+        residuoRepository.buscarPorClaveIdempotencia = buscarIdempotencia;
         sequelize.transaction = transaction;
     });
 }
@@ -29,7 +33,7 @@ test('A4: código inexistente o cuenta inactiva se rechazan antes de cualquier e
 
 test('A4: material/peso/tacho inválidos no escriben aunque la cuenta exista', async (t) => {
     sinEscrituras(t, { id_user: 1, estado: true });
-    for (const cambios of [{ tipo: 'vidrio' }, { peso: 0 }, { peso: Infinity }, { idTacho: -1 }]) {
+    for (const cambios of [{ tipo: 'organicos' }, { peso: 0 }, { peso: Infinity }, { idTacho: -1 }]) {
         await assert.rejects(procesarJSONTacho({ ...mensaje, ...cambios }), { statusCode: 400 });
     }
 });

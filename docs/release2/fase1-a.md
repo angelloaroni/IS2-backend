@@ -98,7 +98,7 @@ Authorization: Bearer <jwt-usuario>
 
 Los mismos cinco campos públicos de R1, limitados al usuario del JWT.
 `desde`/`hasta` son opcionales YYYY-MM-DD en Lima, intervalo `[desde,hasta)`;
-`material` admite plastico, papel/carton u organicos, solo en materiales/métricas.
+`material` admite plastico, papel/carton o vidrio, solo en materiales/métricas.
 No hay parámetro de agrupación configurable: se aprobó agrupación mensual.
 Fechas imposibles, rangos vacíos/invertidos, arrays o campos ajenos dan 400.
 

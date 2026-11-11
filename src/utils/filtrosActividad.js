@@ -1,6 +1,6 @@
 import AppError from './AppError.js';
 
-const materiales = new Set(['plastico', 'papel/carton', 'organicos']);
+const materiales = new Set(['plastico', 'papel/carton', 'vidrio']);
 
 function fechaValida(valor) {
     if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor) || valor.startsWith('0000')) return false;

@@ -2,7 +2,7 @@
 export const TARIFAS_PUNTOS_POR_KG = Object.freeze({
     plastico: 10,
     'papel/carton': 10,
-    organicos: 10,
+    vidrio: 10,
 });
 
 export const calcularPuntos = (peso, tipo) => {

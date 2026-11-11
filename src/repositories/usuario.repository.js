@@ -6,11 +6,15 @@ import { Op } from 'sequelize';
 class UsuarioRepository extends RepositoryBase {
     constructor() { super(Usuario); }
 
-    async buscarPorCodigo(codUser, { transaction = null } = {}) {
-        return this.model.findOne({
+    async buscarPorCodigo(codUser, { transaction = null, lock = false } = {}) {
+        const options = {
             where: { cod_user: String(codUser) },
             transaction,
-        });
+        };
+        if (transaction && lock) {
+            options.lock = transaction.LOCK.UPDATE;
+        }
+        return this.model.findOne(options);
     }
 
     async buscarPorCorreo(correoInstitucional, { transaction = null } = {}) {

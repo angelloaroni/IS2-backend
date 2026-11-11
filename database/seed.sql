@@ -11,9 +11,9 @@ INSERT INTO Usuario (cod_user, id_user, nombre, puntos, tipo, contrasena, estado
 -- Inserción de Productos identificados por su código QR
 INSERT INTO Producto (id_producto, cod_producto, nombre, peso_gramos, tipo) VALUES
 (1, '12345678', 'Botella de plástico', 25, 'plastico'),
-(2, '23456789', 'Botella PET', 30, 'pet'),
-(3, '34567890', 'Periódico', 150, 'papel'),
-(4, '45678901', 'Caja de cartón', 350, 'carton'),
+(2, '23456789', 'Botella PET', 30, 'plastico'),
+(3, '34567890', 'Periódico', 150, 'papel/carton'),
+(4, '45678901', 'Caja de cartón', 350, 'papel/carton'),
 (5, '56789012', 'Cuaderno', 300, 'papel/carton'),
 (6, '67890123', 'Frasco de vidrio', 400, 'vidrio'),
 (7, '78901234', 'Botella de vidrio', 500, 'vidrio');
@@ -53,7 +53,7 @@ INSERT INTO Premio (id_premio, nombre, descripcion, costo, stock) VALUES
 INSERT INTO Residuo (id_residuo, peso, tipo, puntos_ganados, id_user, id_tacho) VALUES
 (1, 0.25, 'plastico', 2.5, 1, 1),
 (2, 0.15, 'papel/carton', 1.5, 1, 1),
-(3, 0.50, 'organico', 5.0, 2, 2),
+(3, 0.50, 'vidrio', 5.0, 2, 2),
 (4, 0.40, 'vidrio', 4.0, 3, 3);
 
 -- Inserción de Logros de Usuario

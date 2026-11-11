@@ -162,7 +162,7 @@ El cliente autenticado puede usar `POST /api/residuos` (también hay rutas alter
 
 - `idUser` e `idTacho` deben ser enteros positivos.
 - El peso debe ser finito y mayor que cero.
-- Los únicos tipos aceptados son `plastico`, `papel/carton` y `organicos`. Se normalizan mayúsculas, espacios exteriores y acentos antes de validarlos.
+- Los únicos tipos aceptados son `plastico`, `papel/carton` y `vidrio`. Se normalizan mayúsculas, espacios exteriores y acentos antes de validarlos.
 - Se requiere `idempotencyKey`, texto no vacío de hasta 128 caracteres.
 - El usuario debe estar activo y el tacho debe existir y estar activo.
 
@@ -174,7 +174,7 @@ Las tarifas actuales son 10 puntos por kilogramo para cada material:
 |---|---:|
 | `plastico` | 10 puntos/kg |
 | `papel/carton` | 10 puntos/kg |
-| `organicos` | 10 puntos/kg |
+| `vidrio` | 10 puntos/kg |
 
 ```text
 puntosGanados = pesoEnKilogramos × tarifaDelTipo
@@ -225,7 +225,7 @@ El tema `smartbin/product/validate` acepta un JSON con `codProducto` de ocho dí
 }
 ```
 
-Los productos almacenan su código QR, nombre, peso en gramos y tipo. Los tipos permitidos son `plastico`, `pet`, `papel`, `carton`, `papel/carton` y `vidrio`.
+Los productos almacenan su código QR, nombre, peso en gramos y tipo. Los únicos tipos permitidos son `plastico`, `papel/carton` y `vidrio`.
 
 El tema `smartbin/status` recibe el identificador, coordenadas y capacidad del tacho:
 
@@ -244,15 +244,22 @@ El tema `smartbin/recycle` recibe exclusivamente:
 
 ```json
 {
-  "idEvento": "identificador-unico",
+  "idEvento": "tacho-1-evento-42",
   "codUser": "00001001",
   "idTacho": 1,
   "tipo": "papel/carton",
-  "peso": 0.5
+  "peso": 25.5
 }
 ```
 
-`idEvento` es obligatorio y se usa como clave de idempotencia; `codUser` debe contener ocho dígitos; el usuario y el tacho deben estar activos. El servidor resuelve el usuario, genera la fecha y calcula los puntos. No se admiten campos adicionales en este mensaje. MQTT QoS 1 permite la entrega al menos una vez; un `idEvento` repetido no vuelve a registrar el residuo ni sumar puntos.
+`idEvento` debe seguir `tacho-{idTacho}-evento-{numero}`, con número positivo y seguro para JSON, y corresponder a `idTacho` (1, 2 o 3). La clave tiene unicidad persistente. El backend valida usuario/tacho activos, genera la fecha y calcula los puntos. Un reenvío idéntico se omite; si el ID ya existe con datos diferentes, se registra un conflicto sin sobrescribirlo. El residuo, sus efectos y el último número por tacho se confirman juntos en una transacción.
+
+Para sincronizar, el firmware publica `{"idTacho":1}` en
+`smartbin/events/last/request`. El backend responde por QoS 1 en
+`smartbin/events/last/response` con `{"idTacho":1,"lastEvent":42}`; si no hay
+eventos devuelve `lastEvent: 0`. El estado persistente reside en
+`mqtt_event_sequence`; los tachos válidos son 1, 2 y 3. En bases existentes,
+aplica `database/migrations/20261111_add_mqtt_event_sequence.sql`.
 
 ## 7. Otras reglas de negocio y fórmulas
 

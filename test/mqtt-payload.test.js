@@ -4,6 +4,7 @@ import { validarMensajeTacho } from '../src/services/residuo.service.js';
 import {
     validarMensajeValidacionEstudiante,
     validarMensajeValidacionProducto,
+    validarMensajeUltimoEvento,
 } from '../src/services/mqtt.service.js';
 
 test('valida el código de estudiante recibido para consulta MQTT', () => {
@@ -50,24 +51,71 @@ test('rechaza códigos QR de producto MQTT inválidos', () => {
 
 test('normaliza el JSON de reciclaje recibido por MQTT', () => {
     assert.deepEqual(validarMensajeTacho({
-        idtacho: 7,
-        evento: 'evento-unico-0001',
+        idTacho: 1,
+        idEvento: 'tacho-1-evento-1',
         codUser: '00001001',
         tipo: 'plastico',
         peso: 0.25,
     }), {
-        idEvento: 'evento-unico-0001',
+        idEvento: 'tacho-1-evento-1',
         codUser: '00001001',
-        idTacho: 7,
+        idTacho: 1,
+        numeroEvento: 1,
         tipo: 'plastico',
         peso: 0.25,
     });
 });
 
-test('rechaza JSON MQTT de reciclaje sin evento único o con aliases duplicados', () => {
+test('rechaza evento inválido, tacho fuera de rango o secuencia discordante', () => {
     const payload = {
-        idtacho: 7,
-        evento: 'evento-unico-0001',
+        idTacho: 1,
+        idEvento: 'tacho-1-evento-1',
+        codUser: '00001001',
+        tipo: 'plastico',
+        peso: 0.25,
+    };
+
+    for (const cambios of [
+        { idEvento: '' },
+        { idEvento: 'tacho-1-evento-0' },
+        { idEvento: 'tacho-2-evento-1' },
+        { idEvento: 'otro-evento-1' },
+        { idTacho: 0 },
+        { idTacho: 4 },
+        { idTacho: 1.5 },
+        { idTacho: '1' },
+        { evento: 'tacho-1-evento-1' },
+        { idtacho: 1 },
+    ]) {
+        assert.throws(() => validarMensajeTacho({ ...payload, ...cambios }), {
+            statusCode: 400,
+        });
+    }
+});
+
+test('valida consultas del último evento y rechaza tachos inválidos', () => {
+    assert.deepEqual(validarMensajeUltimoEvento({ idTacho: 1 }), { idTacho: 1 });
+    assert.deepEqual(validarMensajeUltimoEvento({ idTacho: 2 }), { idTacho: 2 });
+    assert.deepEqual(validarMensajeUltimoEvento({ idTacho: 3 }), { idTacho: 3 });
+
+    for (const data of [
+        null,
+        [],
+        {},
+        { idTacho: 0 },
+        { idTacho: 4 },
+        { idTacho: '1' },
+        { idTacho: 1.5 },
+        { idTacho: 1, extra: true },
+    ]) {
+        assert.throws(() => validarMensajeUltimoEvento(data), { statusCode: 400 });
+    }
+});
+
+test('rechaza JSON MQTT de reciclaje con aliases incompatibles', () => {
+    const payload = {
+        idTacho: 1,
+        idEvento: 'tacho-1-evento-1',
         codUser: '00001001',
         tipo: 'plastico',
         peso: 0.25,
@@ -78,10 +126,10 @@ test('rechaza JSON MQTT de reciclaje sin evento único o con aliases duplicados'
     });
     assert.throws(() => validarMensajeTacho({
         ...payload,
-        idEvento: 'otro-evento',
+        evento: 'tacho-1-evento-2',
     }), { statusCode: 400 });
     assert.throws(() => validarMensajeTacho({
         ...payload,
-        idTacho: 7,
+        idtacho: 1,
     }), { statusCode: 400 });
 });

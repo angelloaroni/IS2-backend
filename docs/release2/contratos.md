@@ -148,8 +148,11 @@ Los fixtures siguen siendo ejemplos; la cola productiva vive en
 
 - `smartbin/status`: formatos admitidos por R1, idTacho y coordenadas/capacidad;
   extensión existente id_tacho/tipo/porcentaje conservada. No reinterpretar estado.
-- `smartbin/recycle`: idEvento, codUser, idTacho, tipo, peso y alias existentes;
-  usuario/tacho activos; idempotencia; puntos/fecha del servidor.
+- `smartbin/recycle`: `idEvento` secuencial `tacho-{idTacho}-evento-{numero}`,
+  codUser, idTacho, tipo y peso; idempotencia y número por tacho persistidos;
+  los puntos/fecha son del servidor.
+- `smartbin/events/last/request` recibe `{ "idTacho": 1 }`; su respuesta QoS 1
+  en `smartbin/events/last/response` contiene `{ "idTacho": 1, "lastEvent": 42 }`.
 - Identificación codUser confirmada. Credenciales/ACL del broker autentican
   dispositivo, no reemplazan identidad de cuenta ni JWT. No reactivar
   `POST /tachos/recepcion` ni introducir QR/RFID.

@@ -49,6 +49,8 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
     const productoNombreSql = await readFile(new URL('../../database/migrations/20261109_add_producto_nombre.sql', import.meta.url), 'utf8');
     const productoTipoVidrioSql = await readFile(new URL('../../database/migrations/20261109_update_producto_tipo_vidrio.sql', import.meta.url), 'utf8');
     const productoPesoSql = await readFile(new URL('../../database/migrations/20261109_add_producto_peso_gramos.sql', import.meta.url), 'utf8');
+    const materialesPermitidosSql = await readFile(new URL('../../database/migrations/20261110_residuo_materiales_permitidos.sql', import.meta.url), 'utf8');
+    const mqttSecuenciaSql = await readFile(new URL('../../database/migrations/20261111_add_mqtt_event_sequence.sql', import.meta.url), 'utf8');
     const fixture = crearFixturesRelease2();
     async function cargarR1(client) {
         await client.query(r1);
@@ -63,15 +65,23 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
         await db.query(migracion); await db.query(eventosSql);
         await db.query(migracion); await db.query(eventosSql);
         await db.query(productoSql); await db.query(productoSql);
+        await db.query('ALTER TABLE producto DROP CONSTRAINT producto_tipo_valido');
         await db.query("INSERT INTO producto(id_producto,cod_producto,tipo) VALUES(1,'12345678','plastico')");
+        await db.query("INSERT INTO producto(id_producto,cod_producto,nombre,tipo) VALUES(2,'23456789','Caja de cartón','carton')");
+        await db.query("INSERT INTO producto(id_producto,cod_producto,nombre,peso_gramos,tipo) VALUES(3,'34567890','Frasco de vidrio',400,'vidrio')");
         await db.query(productoNombreSql); await db.query(productoNombreSql);
-        await db.query("INSERT INTO producto(id_producto,cod_producto,nombre,tipo) VALUES(2,'23456789','Restos de comida','organicos')");
         await db.query(productoTipoVidrioSql); await db.query(productoTipoVidrioSql);
         await db.query(productoPesoSql); await db.query(productoPesoSql);
+        await db.query(materialesPermitidosSql); await db.query(materialesPermitidosSql);
+        await db.query(mqttSecuenciaSql); await db.query(mqttSecuenciaSql);
         assert.equal((await db.query("SELECT nombre FROM producto WHERE cod_producto='12345678'")).rows[0].nombre, 'Producto 12345678');
         assert.deepEqual(
             (await db.query("SELECT nombre,tipo,peso_gramos FROM producto WHERE cod_producto='23456789'")).rows[0],
-            { nombre: 'Producto de vidrio', tipo: 'vidrio', peso_gramos: 400 }
+            { nombre: 'Caja de cartón', tipo: 'papel/carton', peso_gramos: 300 }
+        );
+        assert.deepEqual(
+            (await db.query("SELECT nombre,tipo,peso_gramos FROM producto WHERE cod_producto='34567890'")).rows[0],
+            { nombre: 'Frasco de vidrio', tipo: 'vidrio', peso_gramos: 400 }
         );
         assert.equal(
             (await db.query("SELECT peso_gramos FROM producto WHERE cod_producto='12345678'")).rows[0].peso_gramos,
@@ -99,10 +109,12 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
         const nuevo = await crearDb(`${database}_new`);
         await nuevo.query(await readFile(new URL('../../database/schema.sql', import.meta.url), 'utf8'));
         await nuevo.query(migracion); await nuevo.query(eventosSql);
+        await nuevo.query(mqttSecuenciaSql);
         await nuevo.query(productoSql);
         await nuevo.query(productoNombreSql);
         await nuevo.query(productoTipoVidrioSql);
         await nuevo.query(productoPesoSql);
+        await nuevo.query(materialesPermitidosSql);
         assert.equal((await nuevo.query('SELECT COUNT(*)::int AS n FROM actividad_reciclaje')).rows[0].n, 0);
         const columnas = async (client) => (await client.query("SELECT table_name,column_name,data_type,is_nullable FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name,column_name")).rows;
         assert.deepEqual(await columnas(nuevo), await columnas(db));
@@ -114,7 +126,7 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
         await malo.query('ROLLBACK');
         assert.equal((await malo.query("SELECT COUNT(*)::int AS n FROM information_schema.columns WHERE table_name='residuo' AND column_name='puntos_ganados'")).rows[0].n, 0);
         await malo.query('DELETE FROM historialreciclaje WHERE id_historial=300');
-        await malo.query("UPDATE residuo SET tipo='vidrio' WHERE id_residuo=42");
+        await malo.query("UPDATE residuo SET tipo='organicos' WHERE id_residuo=42");
         await assert.rejects(malo.query(migracion), /material o peso inválido/);
         await malo.query('ROLLBACK');
     });
@@ -140,7 +152,7 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
         assert.equal(personal.totalResiduos, 1); assert.equal(personal.pesoTotalKg, 0.25);
         assert.deepEqual(Object.keys(personal).sort(), ['totalResiduos','pesoTotalKg','porTipo','porPeriodo','porTipoYPeriodo'].sort());
         assert.deepEqual((await dashboard.obtenerMateriales(fixture.filtros.vacio)).porPeriodo, []);
-        assert.equal((await dashboard.obtenerMateriales({ material: 'organicos' })).pesoTotalKg, 1.25);
+        assert.equal((await dashboard.obtenerMateriales({ material: 'vidrio' })).pesoTotalKg, 1.25);
         await db.query("UPDATE usuario SET estado=false WHERE tipo='usuario'");
         assert.deepEqual(await dashboard.obtenerParticipacion(), { participantes: 0, denominador: 0, tasaPorcentaje: null, porPeriodo: [] });
         for (const u of fixture.usuarios) await db.query('UPDATE usuario SET estado=$1 WHERE id_user=$2', [u.estado,u.id_user]);
@@ -186,7 +198,7 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
         assert.equal(propio.body.data.totalResiduos,3);
         assert.equal((await get('/api/usuarios/me/metricas',2)).body.data.totalResiduos,1);
         assert.equal((await get('/api/usuarios/me/metricas?idUser=2',1)).status,400);
-        for (const query of ['desde=2026-02-30','desde=2026-02-02&hasta=2026-02-01','material=vidrio','hasta[]=2026-02-01']) {
+        for (const query of ['desde=2026-02-30','desde=2026-02-02&hasta=2026-02-01','material=organicos','hasta[]=2026-02-01']) {
             assert.equal((await get('/api/dashboard/materiales?'+query,4)).status,400);
         }
         assert.equal((await get('/api/dashboard/participacion?material=plastico',4)).status,400);
@@ -217,8 +229,8 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
     });
     await t.test('A4: entradas rechazadas no escriben en BD ni en eventos pendientes', async () => {
         const antes=(await db.query('SELECT COUNT(*)::int AS n FROM residuo')).rows[0].n;
-        const entrada={idEvento:'rechazo-1',codUser:'00000001',idTacho:3,tipo:'plastico',peso:0.25};
-        for(const [campos,code] of [[{codUser:'00000003'},404],[{codUser:'99999999'},404],[{idTacho:4},404],[{tipo:'vidrio'},400]]) {
+        const entrada={idEvento:'tacho-3-evento-1',codUser:'00000001',idTacho:3,tipo:'plastico',peso:0.25};
+        for(const [campos,code] of [[{codUser:'00000003'},404],[{codUser:'99999999'},404],[{idTacho:4},400],[{tipo:'organicos'},400]]) {
             await assert.rejects(procesarJSONTacho({...entrada,...campos}),{statusCode:code});
         }
         assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM residuo')).rows[0].n,antes);
@@ -253,14 +265,14 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
         await db.query("INSERT INTO producto(id_producto,cod_producto,nombre,peso_gramos,tipo) VALUES(1,'12345678','Botella de plástico',25,'plastico')");
         assert.deepEqual(await validarProducto('12345678'),{codProducto:'12345678',tipo:'plastico',peso:25});
         assert.deepEqual(await validarProducto('99999999'),{codProducto:'99999999',tipo:'desconocido',peso:0});
-        const evento={idEvento:'mqtt-unico-1',codUser:'00000002',idTacho:3,tipo:'papel/carton',peso:0.5};
+        const evento={idEvento:'tacho-3-evento-2',codUser:'00000002',idTacho:3,tipo:'papel/carton',peso:0.5};
         await publicador.publishAsync(process.env.MQTT_TOPIC_EVENTO_RECICLAJE,JSON.stringify(evento),{qos:1});
         async function esperar(consulta) { for(let i=0;i<100;i++){if(await consulta())return;await new Promise(r=>setTimeout(r,25));}assert.fail('No se observó el efecto MQTT esperado'); }
-        await esperar(async()=>(await db.query("SELECT COUNT(*)::int AS n FROM residuo WHERE idempotency_key='mqtt-unico-1'")).rows[0].n===1);
+        await esperar(async()=>(await db.query("SELECT COUNT(*)::int AS n FROM residuo WHERE idempotency_key='tacho-3-evento-2'")).rows[0].n===1);
         await publicador.publishAsync(process.env.MQTT_TOPIC_EVENTO_RECICLAJE,JSON.stringify(evento),{qos:1});
         await publicador.publishAsync(process.env.MQTT_TOPIC_TACHO_ESTADO,JSON.stringify({idTacho:3,latitud:-12.04,longitud:-77.04,capacidad:true}),{qos:1});
         await esperar(async()=>(await db.query('SELECT capacidad FROM tachointeligente WHERE id_tacho=3')).rows[0].capacidad);
-        assert.equal((await db.query("SELECT COUNT(*)::int AS n FROM residuo WHERE idempotency_key='mqtt-unico-1'")).rows[0].n,1);
+        assert.equal((await db.query("SELECT COUNT(*)::int AS n FROM residuo WHERE idempotency_key='tacho-3-evento-2'")).rows[0].n,1);
         assert.equal((await db.query('SELECT puntos FROM usuario WHERE id_user=2')).rows[0].puntos,15);
         assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM evento_pendiente')).rows[0].n,2);
     });

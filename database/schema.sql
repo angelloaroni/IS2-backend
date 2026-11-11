@@ -32,9 +32,35 @@ CREATE TABLE IF NOT EXISTS public.producto
   CONSTRAINT producto_cod_producto_formato CHECK (cod_producto ~ '^[0-9]{8}$'),
   CONSTRAINT producto_peso_gramos_positivo CHECK (peso_gramos > 0),
   CONSTRAINT producto_tipo_valido CHECK (
-    tipo IN ('plastico', 'pet', 'papel', 'carton', 'papel/carton', 'vidrio')
+    tipo IN ('plastico', 'papel/carton', 'vidrio')
   )
 );
+
+ALTER TABLE public.producto
+  DROP CONSTRAINT IF EXISTS producto_tipo_valido;
+
+UPDATE public.producto
+SET tipo = CASE
+  WHEN tipo = 'pet' THEN 'plastico'
+  WHEN tipo IN ('papel', 'carton') THEN 'papel/carton'
+  ELSE tipo
+END
+WHERE tipo IN ('pet', 'papel', 'carton');
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.producto
+    WHERE tipo NOT IN ('plastico', 'papel/carton', 'vidrio')
+  ) THEN
+    RAISE EXCEPTION 'Esquema: clasificar manualmente los productos con tipos de material no permitidos';
+  END IF;
+END
+$$;
+
+ALTER TABLE public.producto
+  ADD CONSTRAINT producto_tipo_valido
+  CHECK (tipo IN ('plastico', 'papel/carton', 'vidrio'));
 
 ALTER TABLE public.producto
   ADD COLUMN IF NOT EXISTS nombre VARCHAR(100);
@@ -52,13 +78,8 @@ ALTER TABLE public.producto
 UPDATE public.producto
 SET peso_gramos = CASE tipo
   WHEN 'plastico' THEN 25
-  WHEN 'pet' THEN 30
-  WHEN 'papel' THEN 150
-  WHEN 'carton' THEN 350
   WHEN 'papel/carton' THEN 300
   WHEN 'vidrio' THEN 400
-  WHEN 'organico' THEN 400
-  WHEN 'organicos' THEN 400
 END
 WHERE peso_gramos IS NULL;
 
@@ -121,6 +142,26 @@ ALTER TABLE public.tachointeligente
 
 DO $$
 BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.tachointeligente
+    WHERE tipo IS NOT NULL AND tipo NOT IN ('plastico', 'papel/carton', 'vidrio')
+  ) THEN
+    RAISE EXCEPTION 'Esquema: clasificar manualmente los tachos con tipos de material no permitidos';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'tachointeligente_tipo_valido'
+      AND conrelid = 'public.tachointeligente'::regclass
+  ) THEN
+    ALTER TABLE public.tachointeligente
+      ADD CONSTRAINT tachointeligente_tipo_valido
+      CHECK (tipo IS NULL OR tipo IN ('plastico', 'papel/carton', 'vidrio'));
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM pg_constraint
@@ -141,8 +182,29 @@ CREATE TABLE IF NOT EXISTS public.residuo
   tipo VARCHAR(32) NOT NULL,
   idempotency_key VARCHAR(128),
   id_user INT NOT NULL REFERENCES public.usuario(id_user),
-  id_tacho INT NOT NULL REFERENCES public.tachointeligente(id_tacho)
+  id_tacho INT NOT NULL REFERENCES public.tachointeligente(id_tacho),
+  CONSTRAINT residuo_tipo_valido CHECK (tipo IN ('plastico', 'papel/carton', 'vidrio'))
 );
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.residuo
+    WHERE tipo NOT IN ('plastico', 'papel/carton', 'vidrio')
+  ) THEN
+    RAISE EXCEPTION 'Esquema: clasificar manualmente los residuos con tipos de material no permitidos';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'residuo_tipo_valido'
+      AND conrelid = 'public.residuo'::regclass
+  ) THEN
+    ALTER TABLE public.residuo
+      ADD CONSTRAINT residuo_tipo_valido
+      CHECK (tipo IN ('plastico', 'papel/carton', 'vidrio'));
+  END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS public.logros
 (
@@ -263,6 +325,36 @@ ALTER TABLE public.residuo
 CREATE UNIQUE INDEX IF NOT EXISTS residuo_idempotency_key_unique
   ON public.residuo (idempotency_key);
 
+CREATE TABLE IF NOT EXISTS public.mqtt_event_sequence
+(
+  id_tacho SMALLINT PRIMARY KEY CHECK (id_tacho IN (1, 2, 3)),
+  last_event BIGINT NOT NULL DEFAULT 0
+    CHECK (last_event >= 0 AND last_event <= 9007199254740991)
+);
+
+INSERT INTO public.mqtt_event_sequence (id_tacho, last_event)
+VALUES (1, 0), (2, 0), (3, 0)
+ON CONFLICT (id_tacho) DO NOTHING;
+
+UPDATE public.mqtt_event_sequence AS secuencia
+SET last_event = GREATEST(
+  secuencia.last_event,
+  COALESCE((
+    SELECT MAX(split_part(r.idempotency_key, '-', 4)::NUMERIC)::BIGINT
+    FROM public.residuo AS r
+    WHERE r.idempotency_key ~ (
+      '^tacho-' || secuencia.id_tacho::TEXT || '-(event|evento)-[0-9]+$'
+    )
+      AND CASE
+        WHEN r.idempotency_key ~ (
+          '^tacho-' || secuencia.id_tacho::TEXT || '-(event|evento)-[0-9]+$'
+        )
+        THEN split_part(r.idempotency_key, '-', 4)::NUMERIC <= 9007199254740991
+        ELSE FALSE
+      END
+  ), 0)
+);
+
 -- Release 2: 20261105_release2_actividad.sql
 
 ALTER TABLE public.residuo ADD COLUMN IF NOT EXISTS puntos_ganados DOUBLE PRECISION;
@@ -272,7 +364,7 @@ ALTER TABLE public.historialreciclaje ADD COLUMN IF NOT EXISTS fecha_instante TI
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM public.residuo
-             WHERE tipo NOT IN ('plastico', 'papel/carton', 'organicos')
+             WHERE tipo NOT IN ('plastico', 'papel/carton', 'vidrio')
                 OR NOT (peso > 0 AND peso < 'Infinity'::DOUBLE PRECISION)) THEN
     RAISE EXCEPTION 'R2: hay residuos históricos con material o peso inválido; revisar antes de migrar';
   END IF;
@@ -322,7 +414,7 @@ SELECT r.id_residuo, r.id_user, r.id_tacho, r.tipo, r.peso, r.puntos_ganados,
         AND COUNT(DISTINCT h.fecha_instante) <= 1
         AND NOT BOOL_OR(h.fecha_instante IS NOT NULL
                         AND (h.fecha_instante AT TIME ZONE 'America/Lima')::DATE <> h.fecha)
-        AND r.tipo IN ('plastico', 'papel/carton', 'organicos')
+        AND r.tipo IN ('plastico', 'papel/carton', 'vidrio')
         AND r.peso > 0 AND r.peso < 'Infinity'::DOUBLE PRECISION) AS consistente
 FROM public.residuo r
 JOIN public.historialreciclaje h ON h.id_residuo = r.id_residuo

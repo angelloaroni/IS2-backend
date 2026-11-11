@@ -19,7 +19,7 @@ function normalizarTipo(tipo) {
     return tipoNormalizado;
 }
 
-export function validarRegistroResiduo(data) {
+export function validarRegistroResiduo(data, { requerirUsuario = true } = {}) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
         throw new AppError('Los datos del residuo no son válidos', 400);
     }
@@ -36,7 +36,7 @@ export function validarRegistroResiduo(data) {
     const pesoNumero = convertirNumero(peso);
     const clave = typeof idempotencyKey === 'string' ? idempotencyKey.trim() : '';
 
-    if (!Number.isInteger(idUserNumero) || idUserNumero <= 0) {
+    if (requerirUsuario && (!Number.isInteger(idUserNumero) || idUserNumero <= 0)) {
         throw new AppError('El usuario no es válido', 400);
     }
     if (!Number.isInteger(idTachoNumero) || idTachoNumero <= 0) {
@@ -50,7 +50,9 @@ export function validarRegistroResiduo(data) {
     }
 
     return {
-        idUser: idUserNumero,
+        idUser: Number.isInteger(idUserNumero) && idUserNumero > 0
+            ? idUserNumero
+            : undefined,
         idTacho: idTachoNumero,
         tipo: normalizarTipo(tipo),
         peso: pesoNumero,

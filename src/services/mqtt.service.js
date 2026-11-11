@@ -3,7 +3,11 @@ import { actualizarEstadoTacho } from './tacho.service.js';
 import { procesarJSONTacho } from './residuo.service.js';
 import UsuarioRepository from '../repositories/usuario.repository.js';
 import productoRepository from '../repositories/producto.repository.js';
+import mqttEventoRepository from '../repositories/mqtt-evento.repository.js';
 import AppError from '../utils/AppError.js';
+
+const TEMA_ULTIMO_EVENTO_SOLICITUD = 'smartbin/events/last/request';
+const TEMA_ULTIMO_EVENTO_RESPUESTA = 'smartbin/events/last/response';
 
 export function iniciarRecepcionMqtt() {
     const url = process.env.MQTT_BROKER_URL || 'mqtt://192.168.0.105:1883';
@@ -25,6 +29,8 @@ export function iniciarRecepcionMqtt() {
         temaRespuestaEstudiante,
         temaValidarProducto,
         temaRespuestaProducto,
+        TEMA_ULTIMO_EVENTO_SOLICITUD,
+        TEMA_ULTIMO_EVENTO_RESPUESTA,
     ];
     if (new Set(temas).size !== temas.length) {
         throw new Error('Los temas MQTT configurados deben ser distintos');
@@ -43,7 +49,13 @@ export function iniciarRecepcionMqtt() {
 
     cliente.on('connect', () => {
         cliente.subscribe(
-            [temaEstado, temaReciclaje, temaValidarEstudiante, temaValidarProducto],
+            [
+                temaEstado,
+                temaReciclaje,
+                temaValidarEstudiante,
+                temaValidarProducto,
+                TEMA_ULTIMO_EVENTO_SOLICITUD,
+            ],
             { qos: 1 },
             (error) => {
                 if (error) {
@@ -51,7 +63,7 @@ export function iniciarRecepcionMqtt() {
                     return;
                 }
                 console.info(
-                    `Suscrito a temas MQTT: ${temaEstado}, ${temaReciclaje}, ${temaValidarEstudiante}, ${temaValidarProducto}`
+                    `Suscrito a temas MQTT: ${temaEstado}, ${temaReciclaje}, ${temaValidarEstudiante}, ${temaValidarProducto}, ${TEMA_ULTIMO_EVENTO_SOLICITUD}`
                 );
             }
         );
@@ -68,7 +80,7 @@ export function iniciarRecepcionMqtt() {
             temaRespuestaProducto,
         }).catch((error) => {
             if (error.statusCode === 409) {
-                console.info('Evento de reciclaje MQTT duplicado; se omite el registro');
+                console.error(`Conflicto de evento MQTT en "${topic}":`, error.message);
                 return;
             }
             console.error(`No se pudo procesar el mensaje MQTT del tema "${topic}":`, error);
@@ -110,7 +122,22 @@ export function validarMensajeValidacionProducto(data) {
     return { codProducto: data.codProducto };
 }
 
-async function procesarMensaje(topic, payload, {
+export function validarMensajeUltimoEvento(data) {
+    if (
+        !data
+        || typeof data !== 'object'
+        || Array.isArray(data)
+        || Object.keys(data).length !== 1
+        || !Number.isInteger(data.idTacho)
+        || data.idTacho < 1
+        || data.idTacho > 3
+    ) {
+        throw new AppError('idTacho debe ser 1, 2 o 3', 400);
+    }
+    return { idTacho: data.idTacho };
+}
+
+export async function procesarMensaje(topic, payload, {
     cliente,
     temaEstado,
     temaReciclaje,
@@ -118,6 +145,8 @@ async function procesarMensaje(topic, payload, {
     temaRespuestaEstudiante,
     temaValidarProducto,
     temaRespuestaProducto,
+    temaUltimoEventoSolicitud = TEMA_ULTIMO_EVENTO_SOLICITUD,
+    temaUltimoEventoRespuesta = TEMA_ULTIMO_EVENTO_RESPUESTA,
 }) {
     let data;
     try {
@@ -131,7 +160,27 @@ async function procesarMensaje(topic, payload, {
         return;
     }
     if (topic === temaReciclaje) {
-        await procesarJSONTacho(data);
+        const resultado = await procesarJSONTacho(data);
+        if (resultado?.duplicado) {
+            console.info(
+                `Evento de reciclaje MQTT duplicado "${resultado.idempotencyKey}"; se omite`
+            );
+        }
+        return;
+    }
+    if (topic === temaUltimoEventoSolicitud) {
+        const { idTacho } = validarMensajeUltimoEvento(data);
+        const lastEvent = await mqttEventoRepository.obtenerUltimoEvento(idTacho);
+        const respuesta = JSON.stringify({ idTacho, lastEvent });
+        await new Promise((resolve, reject) => {
+            cliente.publish(temaUltimoEventoRespuesta, respuesta, { qos: 1 }, (error) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve();
+            });
+        });
         return;
     }
     if (topic === temaValidarEstudiante) {
