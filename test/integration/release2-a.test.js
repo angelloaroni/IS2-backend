@@ -51,6 +51,7 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
     const productoPesoSql = await readFile(new URL('../../database/migrations/20261109_add_producto_peso_gramos.sql', import.meta.url), 'utf8');
     const materialesPermitidosSql = await readFile(new URL('../../database/migrations/20261110_residuo_materiales_permitidos.sql', import.meta.url), 'utf8');
     const mqttSecuenciaSql = await readFile(new URL('../../database/migrations/20261111_add_mqtt_event_sequence.sql', import.meta.url), 'utf8');
+    const premioEstadoSql = await readFile(new URL('../../database/migrations/20261113_add_premio_estado.sql', import.meta.url), 'utf8');
     const fixture = crearFixturesRelease2();
     async function cargarR1(client) {
         await client.query(r1);
@@ -74,6 +75,7 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
         await db.query(productoPesoSql); await db.query(productoPesoSql);
         await db.query(materialesPermitidosSql); await db.query(materialesPermitidosSql);
         await db.query(mqttSecuenciaSql); await db.query(mqttSecuenciaSql);
+        await db.query(premioEstadoSql); await db.query(premioEstadoSql);
         assert.equal((await db.query("SELECT nombre FROM producto WHERE cod_producto='12345678'")).rows[0].nombre, 'Producto 12345678');
         assert.deepEqual(
             (await db.query("SELECT nombre,tipo,peso_gramos FROM producto WHERE cod_producto='23456789'")).rows[0],
@@ -110,6 +112,7 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
         await nuevo.query(await readFile(new URL('../../database/schema.sql', import.meta.url), 'utf8'));
         await nuevo.query(migracion); await nuevo.query(eventosSql);
         await nuevo.query(mqttSecuenciaSql);
+        await nuevo.query(premioEstadoSql);
         await nuevo.query(productoSql);
         await nuevo.query(productoNombreSql);
         await nuevo.query(productoTipoVidrioSql);
@@ -133,6 +136,27 @@ test('A: PostgreSQL aislado, migración, HTTP y MQTT', {
     process.env.DATABASE_URL = ''; process.env.DB_NAME = database;
     process.env.JWT_SECRET = randomBytes(48).toString('hex');
     sequelize = (await import('../../src/config/db.js')).default;
+    await t.test('premios: edita, elimina y conserva canjes previos en PostgreSQL', async () => {
+        const { editarPremio, eliminarPremio, obtenerPremios, canjearPremio } = await import('../../src/services/premio.service.js');
+        await db.query("INSERT INTO premio(id_premio,nombre,descripcion,costo,stock) VALUES(910,'Cuaderno','Reciclado',50,20)");
+        await db.query("INSERT INTO usuario_premio(id_usuario_premio,fecha_obtencion,id_premio,id_user) VALUES(910,'2026-11-13',910,1)");
+        try {
+            const premio = await editarPremio('910', { costo: 60, stock: 0 });
+            assert.equal(premio.nombre, 'Cuaderno');
+            assert.equal(premio.costo, 60);
+            assert.equal(premio.stock, 0);
+            await eliminarPremio('910');
+            assert.equal((await db.query('SELECT estado FROM premio WHERE id_premio=910')).rows[0].estado, false);
+            assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM usuario_premio WHERE id_premio=910')).rows[0].n, 1);
+            assert.equal((await obtenerPremios()).some((p) => p.id_premio === 910), false);
+            await assert.rejects(editarPremio('910', { stock: 2 }), { statusCode: 404 });
+            await assert.rejects(eliminarPremio('910'), { statusCode: 404 });
+            await assert.rejects(canjearPremio(1, '910'), { statusCode: 404 });
+        } finally {
+            await db.query('DELETE FROM usuario_premio WHERE id_premio=910');
+            await db.query('DELETE FROM premio WHERE id_premio=910');
+        }
+    });
     const estadisticas = await import('../../src/services/estadistica.service.js');
     const dashboard = await import('../../src/services/dashboard.service.js');
     const { obtenerMetricas } = await import('../../src/services/metrica.service.js');

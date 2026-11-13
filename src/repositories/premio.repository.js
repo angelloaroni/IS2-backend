@@ -5,7 +5,7 @@ import UsuarioPremio from '../models/UsuarioPremio.js';
 
 class PremioRepository {
     async listar() {
-        return Premio.findAll({ order: [['id_premio', 'ASC']] });
+        return Premio.findAll({ where: { estado: true }, order: [['id_premio', 'ASC']] });
     }
 
     async buscarPorId(id, options = {}) {
@@ -32,7 +32,11 @@ class PremioRepository {
     }
 
     async bloquearPremio(idPremio, transaction) {
-        return Premio.findByPk(idPremio, { transaction, lock: transaction.LOCK.UPDATE });
+        return Premio.findOne({
+            where: { id_premio: idPremio, estado: true },
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+        });
     }
 
     async listarCanjes(idUser) {

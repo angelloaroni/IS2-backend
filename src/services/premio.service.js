@@ -14,7 +14,7 @@ export async function obtenerPremios() {
     return premios.map((premio) => premio.toJSON());
 }
 
-export async function agregarPremio(data = {}) {
+function validarDatosPremio(data, parcial = false) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
         throw new AppError('Los datos del premio no son válidos', 400);
     }
@@ -23,23 +23,62 @@ export async function agregarPremio(data = {}) {
     if (camposDesconocidos.length > 0) {
         throw new AppError(`Campos no permitidos: ${camposDesconocidos.join(', ')}`, 400);
     }
-    const nombre = typeof data.nombre === 'string' ? data.nombre.trim() : '';
-    const descripcion = typeof data.descripcion === 'string' ? data.descripcion.trim() : '';
-    const costo = typeof data.costo === 'boolean' || data.costo === null || data.costo === ''
-        ? Number.NaN
-        : Number(data.costo);
-    const stock = typeof data.stock === 'boolean' || data.stock === null || data.stock === ''
-        ? Number.NaN
-        : Number(data.stock);
+    const cambios = {};
+    for (const campo of ['nombre', 'descripcion']) {
+        if (parcial && !Object.hasOwn(data, campo)) continue;
+        const texto = typeof data[campo] === 'string' ? data[campo].trim() : '';
+        if (!texto) throw new AppError(`El campo ${campo} debe contener texto`, 400);
+        cambios[campo] = texto;
+    }
+    for (const campo of ['costo', 'stock']) {
+        if (parcial && !Object.hasOwn(data, campo)) continue;
+        const valor = data[campo];
+        const numero = (typeof valor === 'number'
+            || (typeof valor === 'string' && valor.trim() !== '')) ? Number(valor) : Number.NaN;
+        if (campo === 'costo' && (!Number.isFinite(numero) || numero <= 0)) {
+            throw new AppError('El costo debe ser mayor a cero', 400);
+        }
+        if (campo === 'stock' && (!Number.isSafeInteger(numero) || numero < 0)) {
+            throw new AppError('El stock debe ser un entero mayor o igual a cero', 400);
+        }
+        cambios[campo] = numero;
+    }
+    if (Object.keys(cambios).length === 0) {
+        throw new AppError('Debe enviar al menos un campo para actualizar', 400);
+    }
+    return cambios;
+}
 
-    if (!nombre) throw new AppError('El nombre del premio es obligatorio', 400);
-    if (!descripcion) throw new AppError('La descripción del premio es obligatoria', 400);
-    if (!Number.isFinite(costo) || costo <= 0) {
-        throw new AppError('El costo debe ser mayor a cero', 400);
+function validarIdPremio(id) {
+    const numero = Number(id);
+    if (!/^[1-9]\d*$/.test(String(id)) || !Number.isSafeInteger(numero)) {
+        throw new AppError('El id del premio debe ser un entero positivo', 400);
     }
-    if (!Number.isSafeInteger(stock) || stock < 0) {
-        throw new AppError('El stock debe ser un entero mayor o igual a cero', 400);
-    }
+    return numero;
+}
+
+export async function editarPremio(id, data) {
+    const idPremio = validarIdPremio(id);
+    const cambios = validarDatosPremio(data, true);
+    return sequelize.transaction(async (transaction) => {
+        const premio = await premioRepository.bloquearPremio(idPremio, transaction);
+        if (!premio) throw new AppError('Premio no encontrado', 404);
+        await premio.update(cambios, { transaction });
+        return premio.toJSON();
+    });
+}
+
+export async function eliminarPremio(id) {
+    const idPremio = validarIdPremio(id);
+    return sequelize.transaction(async (transaction) => {
+        const premio = await premioRepository.bloquearPremio(idPremio, transaction);
+        if (!premio) throw new AppError('Premio no encontrado', 404);
+        await premio.update({ estado: false }, { transaction });
+    });
+}
+
+export async function agregarPremio(data = {}) {
+    const { nombre, descripcion, costo, stock } = validarDatosPremio(data);
 
     const premioJSON = await sequelize.transaction(async (transaction) => {
         const idPremio = await premioRepository.siguienteId(

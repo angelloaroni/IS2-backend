@@ -19,6 +19,11 @@ const Premio = sequelize.define('Premio', {
         type: DataTypes.FLOAT,
         allowNull: false
     },
+    estado: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true
+    },
     stock: {
         type: DataTypes.INTEGER,
         allowNull: false

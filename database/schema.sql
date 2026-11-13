@@ -228,7 +228,8 @@ CREATE TABLE IF NOT EXISTS public.premio
   nombre VARCHAR NOT NULL,
   descripcion VARCHAR NOT NULL,
   costo FLOAT NOT NULL,
-  stock INT NOT NULL
+  stock INT NOT NULL,
+  estado BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 CREATE TABLE IF NOT EXISTS public.usuario_premio

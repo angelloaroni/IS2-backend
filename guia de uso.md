@@ -38,7 +38,7 @@ Authorization: Bearer <jwt>
 
 - Rutas públicas: solicitud y verificación de códigos, `POST /auth/registro`, `POST /auth/recuperar-contrasena`, `POST /auth/modificar-contrasena` y `POST /auth/login`.
 - Rutas para usuarios autenticados: perfil, historial, métricas, residuos, ranking, logros, premios y notificaciones personales.
-- Rutas administrativas: creación, edición y baja de tachos, creación de premios y logros, envío de notificaciones del sistema y baja de usuarios.
+- Rutas administrativas: creación, edición y baja de tachos, creación, edición y eliminación de premios, creación de logros, envío de notificaciones del sistema y baja de usuarios.
 - El header `x-cod-user` no autentica ninguna ruta; la identidad real se valida desde el JWT y la base de datos.
 
 Configura `JWT_SECRET` en el entorno del servidor con al menos 32 bytes aleatorios. Las contraseñas se guardan con hash bcrypt; las contraseñas antiguas en texto plano se convierten a hash al iniciar sesión correctamente.
@@ -672,7 +672,7 @@ Authorization: Bearer <jwt>
 
 **Recibe:** no requiere body ni parámetros.
 
-**Devuelve:** un arreglo de premios con los campos del modelo, por ejemplo `id_premio`, `nombre`, `descripcion`, `costo` y `stock`.
+**Devuelve:** un arreglo de premios activos con `id_premio`, `nombre`, `descripcion`, `costo`, `stock` y `estado`. Los premios eliminados no aparecen en este listado.
 
 ### 6.2 Crear premio
 
@@ -728,6 +728,62 @@ Authorization: Bearer <jwt>
   "error": null
 }
 ```
+
+### 6.4 Editar premio
+
+Requiere rol `admin`.
+
+```http
+PUT /premios/1
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+**Recibe** uno o varios campos en el body:
+
+```json
+{
+  "nombre": "Cuaderno ecológico",
+  "descripcion": "Cuaderno de papel reciclado de 100 hojas",
+  "costo": 60,
+  "stock": 15
+}
+```
+
+Se debe enviar al menos un campo. `nombre` y `descripcion` deben contener texto; `costo` debe ser finito y mayor que cero; `stock` debe ser un entero igual o mayor que cero. No se admiten campos adicionales, incluidos `id_premio` y `estado`. Los campos omitidos conservan sus valores.
+
+**Devuelve** HTTP 200 con el premio actualizado dentro de `data`. Un id inválido o un body inválido devuelve 400; un premio inexistente o eliminado devuelve 404.
+
+### 6.5 Eliminar premio
+
+Requiere rol `admin`.
+
+```http
+DELETE /premios/1
+Authorization: Bearer <jwt>
+```
+
+**Recibe:** `id` como entero positivo en la ruta. No requiere body.
+
+**Devuelve** HTTP 200:
+
+```json
+{
+  "ok": true,
+  "data": { "mensaje": "Premio eliminado correctamente" },
+  "error": null
+}
+```
+
+La eliminación es lógica (`estado: false`): conserva los canjes anteriores y el premio deja de estar disponible en el listado, para edición y para nuevos canjes. Un id inválido devuelve 400; un premio inexistente o ya eliminado devuelve 404. Ambas operaciones requieren JWT (401 si falta o no es válido) y rol `admin` (403 para otros roles).
+
+Para una base existente, aplica una vez la migración antes de iniciar el backend actualizado:
+
+```powershell
+psql -h localhost -p 5432 -U usuario_postgres -d nombre_base -f "database\migrations\20261113_add_premio_estado.sql"
+```
+
+Reemplaza el usuario y el nombre de base por los de tu entorno. La migración mantiene los premios existentes activos. Las bases nuevas ya incluyen el campo en `database/schema.sql`.
 
 ## 7. Logros
 
