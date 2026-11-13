@@ -10,6 +10,13 @@ class NotificacionRepository {
         });
     }
 
+    async marcarLeidasPorUsuario(idUser) {
+        return Notificacion.update(
+            { leida: true },
+            { where: { id_user: idUser, leida: false } }
+        );
+    }
+
     async crear(data) {
         return Notificacion.create(data);
     }

@@ -12,6 +12,10 @@ export async function obtenerNotificaciones(idUser) {
     return notificacionRepository.listarPorUsuario(idUser);
 }
 
+export async function marcarNotificacionesLeidas(idUser) {
+    return notificacionRepository.marcarLeidasPorUsuario(idUser);
+}
+
 export async function notificarSistema(data = {}) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
         throw new AppError('Los datos de la notificación no son válidos', 400);

@@ -65,16 +65,20 @@ function construirRanking(usuarios, actividad, excluidos) {
                 cantidadResiduos: 0,
                 pesoTotalKg: 0,
             };
+            const puntosBase = usuario.puntos !== undefined && usuario.puntos !== null
+                ? Number(usuario.puntos)
+                : 0;
+            const puntosEfectivos = Math.max(puntosBase, datos.puntosGanados);
             return {
                 id_user: Number(usuario.id_user),
                 nombre: usuario.nombre,
-                puntos: datos.puntosGanados,
-                puntosGanados: datos.puntosGanados,
+                puntos: puntosEfectivos,
+                puntosGanados: puntosEfectivos,
                 cantidadResiduos: datos.cantidadResiduos,
                 pesoTotalKg: datos.pesoTotalKg,
             };
         })
-        .sort((a, b) => b.puntosGanados - a.puntosGanados || a.id_user - b.id_user)
+        .sort((a, b) => b.puntos - a.puntos || a.id_user - b.id_user)
         .map((usuario, indice) => ({ ...usuario, posicion: indice + 1 }));
 }
 

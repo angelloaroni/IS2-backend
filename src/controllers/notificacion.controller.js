@@ -1,5 +1,6 @@
 import { exito } from '../utils/respuesta.js';
 import {
+    marcarNotificacionesLeidas,
     notificarSistema,
     obtenerNotificaciones,
 } from '../services/notificacion.service.js';
@@ -8,6 +9,15 @@ export async function obtenerNotificacionesController(req, res, next) {
     try {
         const notificaciones = await obtenerNotificaciones(req.usuario.id_user);
         return exito(res, notificaciones);
+    } catch (error) {
+        return next(error);
+    }
+}
+
+export async function marcarNotificacionesLeidasController(req, res, next) {
+    try {
+        await marcarNotificacionesLeidas(req.usuario.id_user);
+        return exito(res, { mensaje: 'Notificaciones marcadas como leídas' });
     } catch (error) {
         return next(error);
     }

@@ -5,7 +5,7 @@ class RankingRepository {
     async listarUsuariosElegibles() {
         return Usuario.findAll({
             where: { estado: true, tipo: 'usuario' },
-            attributes: ['id_user', 'nombre'],
+            attributes: ['id_user', 'nombre', 'puntos'],
             order: [['id_user', 'ASC']],
             raw: true,
         });
